@@ -6,7 +6,7 @@ UBAI 환경은 기본적으로 `conda` 지향적입니다. `uv`를 바탕으로 
 
 ## Docker
 
-UBAI는 `enroot`를 사용하여 계산 노드의 컨테이너를 결정합니다. 기본적으로는 그냥 [Docker Hub](https://hub.docker.com/의 ubuntu-python 이미지를 사용합니다만, [`Dockerfile`](../Dockerfile)을 통해 특정 패키지나 설정을 추가할 수 있습니다.
+UBAI는 `enroot`를 사용하여 계산 노드의 컨테이너를 결정합니다. 기본적으로는 그냥 [Docker Hub](https://hub.docker.com/)의 ubuntu-python 이미지를 사용합니다만, [`Dockerfile`](../Dockerfile)을 통해 특정 패키지나 설정을 추가할 수 있습니다.
 
 우리의 Dockerfile이 하는 역할은 다음과 같습니다.
 
