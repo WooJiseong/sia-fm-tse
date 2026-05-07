@@ -3,8 +3,44 @@ name = "sia-fm-tse"
 version = "0.1.0"
 description = "Generative Traget Speaker Extraction with Flow Matching"
 readme = "README.md"
-requires-python = "==3.11*"
-dependencies = []
+requires-python = ">=3.12"
+dependencies = [
+    "accelerate>=1.13.0",
+    "einops>=0.8.2",
+    "einx>=0.4.3",
+    "ema-pytorch>=0.7.9",
+    "encodec>=0.1.1",
+    "espnet>=202511",
+    "julius>=0.2.7",
+    "kaldiio>=2.18.1",
+    "librosa>=0.11.0",
+    "numpy>=2.4.3",
+    "pydub>=0.25.1",
+    "sentencepiece>=0.2.0",
+    "soundfile>=0.13.1",
+    "soxr>=1.1.0",
+    "torch==2.5.1",
+    "torchaudio==2.5.1",
+    "torchdiffeq>=0.2.5",
+    "torchmetrics>=1.0.3",
+    "tqdm>=4.66.5",
+    "vocos>=0.1.0",
+    "x-transformers>=2.18.10",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+torchaudio = { index = "pytorch" }
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
 
 [tool.ruff]
 target-version = "py311"

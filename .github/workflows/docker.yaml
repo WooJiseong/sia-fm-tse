@@ -10,6 +10,7 @@ on:
       - Dockerfile
       - pyproject.toml
       - uv.lock
+      - .github/workflows/docker.yaml
 
 env:
   REGISTRY: ghcr.io
