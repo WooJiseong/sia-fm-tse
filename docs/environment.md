@@ -48,3 +48,26 @@ UBAI는 `enroot`를 사용하여 계산 노드의 컨테이너를 결정합니�
 
 > [!TIP]
 > [tmux](https://github.com/tmux/tmux)나 [zellij](https://github.com/zellij-org/zellij)를 사용하여 컨테이너를 백그라운드에서 실행할 것을 **강력히 권장**합니다.
+
+---
+
+## Setup at Head Node
+
+한 편,
+
+1. `just`를 사용하기 위해서
+2. private repo에 공개한 우리의 Docker 이미지를 사용하기 위해서
+
+헤드 노드에도 사전작업이 필요합니다. github cli와 justfile을 설치하세요.
+
+```sh
+conda install -c conda-forge gh just
+```
+
+이후 github에 로그인하여 `credential`을 헤드 노드에 저장해야 합니다!
+
+```sh
+gh auth login
+```
+
+이거까지 해주시면, `just setup`이 정상적으로 동작합니다.

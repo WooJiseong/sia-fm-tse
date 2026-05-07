@@ -12,7 +12,7 @@ build:
 # 계산 노드에서 실험 환경 셋업: e.g. `just setup gpu5`
 setup node:
     srun --pty --nodelist={{ node }} /bin/bash -c \
-        "enroot import docker://{{ IMAGE }} && \
+        "gh auth token | enroot import docker://{{ IMAGE }} && \
          enroot create -n {{ CONTAINER }} {{ CONTAINER }}+latest.sqsh && \
          enroot start --root --rw --mount .:/workspace {{ CONTAINER }} \
              /bin/bash -c 'cd /workspace && uv pip install -e . --no-deps'"
