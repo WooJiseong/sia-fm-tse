@@ -1,9 +1,10 @@
-# 의존성 충돌 해결용 Dockerfile
+#=====[ 의존성 충돌 해결용 Dockerfile ]=====#
 ARG CUDA_VERSION=12.1.0
-ARG PYTHON_VERSION=3.11
 
 # tip: cuda 이미지는 ubuntu밖에 제공 안 함
 FROM nvidia/cuda:${CUDA_VERSION}-cudnn8-devel-ubuntu22.04
+
+ARG PYTHON_VERSION=3.11
 
 # 기본 패키지 및 python 설치
 #   - deadsnakes PPA에서 <=3.11 버전 설치
