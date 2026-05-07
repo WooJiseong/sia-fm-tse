@@ -1,0 +1,7 @@
+[project]
+name = "sia-fm-tse"
+version = "0.1.0"
+description = "Generative Traget Speaker Extraction with Flow Matching"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
