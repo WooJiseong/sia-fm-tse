@@ -1,15 +1,16 @@
-# Python-generated files
-__pycache__/
-*.py[cod]
-build/
-dist/
-wheels/
-*.egg-info
+*/__pycache__
+bridge_outputs/
+# Large checkpoints / generated artifacts
+*.pt
+*.pt.tar
+*.pth
+*.ckpt
+*.tar
+*.tar.gz
+*.zip
 
-# Virtual environments
-.venv
-
-# Editor
-.zed/
-.vscode/
-*.swp
+bridge_outputs/
+flowse/output/
+flowse/wenetspeech4tts_Premium.pt.tar
+TSE-through-Positive-Negative-Enroll/output/
+TSE-through-Positive-Negative-Enroll/data/
