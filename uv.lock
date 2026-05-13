@@ -1898,6 +1898,11 @@ dependencies = [
     { name = "zipp" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "sia-fm-tse" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "antlr4-python3-runtime", specifier = "==4.9.3" },
@@ -2004,6 +2009,9 @@ requires-dist = [
     { name = "x-transformers", specifier = "==2.18.9" },
     { name = "zipp", specifier = "==3.23.1" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "sia-fm-tse", virtual = "." }]
 
 [[package]]
 name = "six"
