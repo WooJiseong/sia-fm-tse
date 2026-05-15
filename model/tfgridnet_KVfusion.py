@@ -13,6 +13,21 @@ from torch.nn import init
 from espnet2.torch_utils.get_layer_from_string import get_layer
 import torch.nn.functional as F
 
+def stat_pool1d(tensor:torch.Tensor, kernel_size:int , stride:int) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    1D 텐서의 평균과 표준편차를 풀링하여 출력합니다.
+
+    Input : 1D Tensor (batch_size, channels, sequence_length), 
+            kernel_size (int) : 윈도우 크기
+            stride (int) : 윈도우 점프 크기 
+    Output : tuple[torch.Tensor, torch.Tensor]:
+            - mean_val (torch.Tensor): Mean Tensor
+            - std_val (torch.Tensor): Standard Deviation Tensor
+    """
+    mean_val = F.avg_pool1d(tensor, kernel_size=kernel_size, stride=stride)
+    sq_mean_val = F.avg_pool1d(tensor ** 2, kernel_size=kernel_size, stride=stride)
+    std_val = torch.sqrt(torch.clamp(sq_mean_val - mean_val ** 2, min=1e-8))
+    return mean_val, std_val
 
 class TFGridNet_KVfusion(nn.Module):
     def __init__(self,
@@ -44,7 +59,7 @@ class TFGridNet_KVfusion(nn.Module):
             self.model.add_module(
                 "attn_conv_K_%d" % ii,
                 nn.Sequential(
-                    nn.Conv2d(emb_dim, E, 1),
+                    nn.Conv2d(emb_dim*2, E, 1),
                     get_layer(activation)(),
                     LayerNormalization4DCF((E, n_freqs), eps=eps),
                 ),
@@ -52,7 +67,7 @@ class TFGridNet_KVfusion(nn.Module):
             self.model.add_module(
                 "attn_conv_V_%d" % ii,
                 nn.Sequential(
-                    nn.Conv2d(emb_dim, emb_dim // n_head, 1),
+                    nn.Conv2d(emb_dim*2, emb_dim // n_head, 1),
                     get_layer(activation)(),
                     LayerNormalization4DCF((emb_dim // n_head, n_freqs), eps=eps),
                 ),
@@ -81,18 +96,30 @@ class TFGridNet_KVfusion(nn.Module):
         ## change cond to [B, C, F, T], then [B, C*F, T] shape
         pos_cond = pos_cond.transpose(2, 3) # [B, C, F, T]
         pos_cond = pos_cond.flatten(0, 1) # [B*C, F, T]
-        pos_cond = nn.functional.avg_pool1d(input=pos_cond, kernel_size=self.pooling_size, stride=self.stride)
-        pos_cond = pos_cond.transpose(1, 2) # [B*C, T', F]
+        mean_pos, std_pos = stat_pool1d(input=pos_cond, kernel_size=self.pooling_size, stride=self.stride)
+        
+        mean_pos = mean_pos.unflatten(dim=0, sizes=(B, C)) # [B, C, F, T']
+        std_pos = std_pos.unflatten(dim=0, sizes=(B, C))
+
+        pos_cond = torch.cat([mean_pos, std_pos], dim=1)
+
+        pos_cond = pos_cond.transpose(2, 3) # [B*C, T', F]
         pos_cond = pos_cond.unflatten(dim=0, sizes=(B, C))
 
         if neg_cond is not None:
             neg_cond = neg_cond.transpose(2, 3) # [B, C, F, T]
             neg_cond = neg_cond.flatten(0, 1) # [B*C, F, T]
-            neg_cond = nn.functional.avg_pool1d(input=neg_cond, kernel_size=self.pooling_size, stride=self.stride)
-            neg_cond = neg_cond.transpose(1, 2) # [B*C, T', F]
-            neg_cond = neg_cond.unflatten(dim=0, sizes=(B, C)) # [B, C, T', F]
 
-            cond = torch.concat([pos_cond, -neg_cond], dim=2) # [B, C, 2T', F]
+            mean_neg, std_neg = stat_pool1d(input=pos_cond, kernel_size=self.pooling_size, stride=self.stride)
+        
+            mean_neg = mean_neg.unflatten(dim=0, sizes=(B, C)) # [B, C, F, T']
+            std_neg = std_neg.unflatten(dim=0, sizes=(B, C))
+
+            neg_cond = torch.cat([mean_pos, std_pos], dim=1)
+
+            neg_cond = neg_cond.transpose(2, 3) # [B*C, T', F]
+
+            cond = torch.concat([pos_cond, -neg_cond], dim=2) # [B, 2C, 2T', F]
         else:
             cond = pos_cond
 
