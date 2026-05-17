@@ -1,6 +1,0 @@
-output/
-example/
-data/
-*/__pycache__
-__pycache__/
-model/best.ckpt
