@@ -1,0 +1,4 @@
+datalist/
+static/
+output/
+*/__pycache__
