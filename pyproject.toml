@@ -110,6 +110,10 @@ dependencies = [
     "zipp==3.23.1",
 ]
 
+[tool.pyright]
+typeCheckingMode = "basic"
+reportPrivateImportUsage = "none"
+
 [tool.uv.sources]
 torch = { index = "pytorch" }
 torchaudio = { index = "pytorch" }

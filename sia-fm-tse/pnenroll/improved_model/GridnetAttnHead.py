@@ -1,20 +1,21 @@
-'''
+"""
 Code for the Encoder Fusion Module
 Adopted from the TFGridnet code provided in ESPnet: end-to-end speech processing toolkit and LookOnceToHear
 - ESPnet: https://github.com/espnet/espnet
 - LookOnceToHear: https://github.com/vb000/lookoncetohear
 The modification includes the concatenation of the input two embedding sequences, and the addition of Segmentation Embeddings
-'''
+"""
 
 import math
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from espnet2.enh.separator.tfgridnet_separator import GridNetBlock
+from espnet2.torch_utils.get_layer_from_string import get_layer
 from torch.nn import init
 from torch.nn.parameter import Parameter
-from espnet2.torch_utils.get_layer_from_string import get_layer
-from espnet2.enh.separator.tfgridnet_separator import GridNetBlock
+
 
 class LayerNormalization4DCF(nn.Module):
     def __init__(self, input_dimension, eps=1e-5):
@@ -31,7 +32,7 @@ class LayerNormalization4DCF(nn.Module):
         if x.ndim == 4:
             stat_dim = (1, 3)
         else:
-            raise ValueError("Expect x to have 4 dimensions, but got {}".format(x.ndim))
+            raise ValueError(f"Expect x to have 4 dimensions, but got {x.ndim}")
         mu_ = x.mean(dim=stat_dim, keepdim=True)  # [B,1,T,1]
         std_ = torch.sqrt(
             x.var(dim=stat_dim, unbiased=False, keepdim=True) + self.eps
@@ -39,9 +40,19 @@ class LayerNormalization4DCF(nn.Module):
         x_hat = ((x - mu_) / std_) * self.gamma + self.beta
         return x_hat
 
+
 class GridNetBlock_attnhead(nn.Module):
-    def __init__(self, layer_num, pooling_size, stride, return_clean_dvec=False, out_dim=0, refine_layer_num=0, 
-                 fusion_shortcut=[0], cut_pos=False):
+    def __init__(
+        self,
+        layer_num,
+        pooling_size,
+        stride,
+        return_clean_dvec=False,
+        out_dim=0,
+        refine_layer_num=0,
+        fusion_shortcut=(0,),
+        cut_pos=False,
+    ):
         super().__init__()
 
         self.pooling_size = pooling_size
@@ -59,7 +70,8 @@ class GridNetBlock_attnhead(nn.Module):
                     n_freqs=65,
                     n_head=4,
                     eps=1.0e-5,
-                ))
+                )
+            )
         if return_clean_dvec:
             self.embed_proj = nn.Sequential(
                 nn.Linear(65 * 64, 256),
@@ -70,37 +82,49 @@ class GridNetBlock_attnhead(nn.Module):
         if refine_layer_num > 0:
             self.pending_module = nn.ModuleList([])
             for _ in range(refine_layer_num):
-                self.pending_module.append(GridNetBlock(
-                    emb_dim=64,
-                    emb_ks=1,
-                    emb_hs=1,
-                    n_freqs=65,
-                    hidden_channels=64,
-                    n_head=4,
-                    approx_qk_dim=512,
-                    activation="prelu",
-                    eps=1.0e-5,
-                ))
+                self.pending_module.append(
+                    GridNetBlock(
+                        emb_dim=64,
+                        emb_ks=1,
+                        emb_hs=1,
+                        n_freqs=65,
+                        hidden_channels=64,
+                        n_head=4,
+                        approx_qk_dim=512,
+                        activation="prelu",
+                        eps=1.0e-5,
+                    )
+                )
 
         self.fusion_shortcut = fusion_shortcut
         self.cut_pos = cut_pos
 
         if out_dim != 0:
-            assert not return_clean_dvec, "hotfix for now: linear project for stylespeech is different from dvec output"
+            assert not return_clean_dvec, (
+                "hotfix for now: linear project for stylespeech is different from dvec output"
+            )
             self.embed_proj = nn.Sequential(
                 nn.Linear(65 * 64, out_dim),
             )
-            
+
     def forward(self, pos_cond, neg_cond):
         B, C, T_pos, F = pos_cond.shape
         B, C, T_neg, F = neg_cond.shape
 
-        x = torch.concat([pos_cond, neg_cond], dim=2) # [B, C, 2T', F]
+        x = torch.concat([pos_cond, neg_cond], dim=2)  # [B, C, 2T', F]
 
-        seg_idx = torch.concat([torch.zeros((B, T_pos), device=pos_cond.device), torch.ones((B, T_neg), device=pos_cond.device)], dim=1)
-        seg_emb = self.segment_embedding(seg_idx.to(torch.int32)) # [B, 2T', C * F]
-        seg_emb = seg_emb.unflatten(dim=2, sizes=(C, F)).permute((0, 2, 1, 3)) # [B, C, 2T', F]
-        
+        seg_idx = torch.concat(
+            [
+                torch.zeros((B, T_pos), device=pos_cond.device),
+                torch.ones((B, T_neg), device=pos_cond.device),
+            ],
+            dim=1,
+        )
+        seg_emb = self.segment_embedding(seg_idx.to(torch.int32))  # [B, 2T', C * F]
+        seg_emb = seg_emb.unflatten(dim=2, sizes=(C, F)).permute(
+            (0, 2, 1, 3)
+        )  # [B, C, 2T', F]
+
         x = x + seg_emb
 
         for ii, layer in enumerate(self.model):
@@ -116,6 +140,7 @@ class GridNetBlock_attnhead(nn.Module):
             for ii in range(self.refine_layer_num):
                 x = self.pending_module[ii](x)  # [B, -1, T, F]
         return x
+
 
 class GridNetBlock_attn(nn.Module):
     def __getitem__(self, key):
@@ -140,7 +165,7 @@ class GridNetBlock_attn(nn.Module):
         assert emb_dim % n_head == 0
         for ii in range(n_head):
             self.add_module(
-                "attn_conv_Q_%d" % ii,
+                f"attn_conv_Q_{ii}",
                 nn.Sequential(
                     nn.Conv2d(emb_dim, E, 1),
                     get_layer(activation)(),
@@ -148,7 +173,7 @@ class GridNetBlock_attn(nn.Module):
                 ),
             )
             self.add_module(
-                "attn_conv_K_%d" % ii,
+                f"attn_conv_K_{ii}",
                 nn.Sequential(
                     nn.Conv2d(emb_dim, E, 1),
                     get_layer(activation)(),
@@ -156,7 +181,7 @@ class GridNetBlock_attn(nn.Module):
                 ),
             )
             self.add_module(
-                "attn_conv_V_%d" % ii,
+                f"attn_conv_V_{ii}",
                 nn.Sequential(
                     nn.Conv2d(emb_dim, emb_dim // n_head, 1),
                     get_layer(activation)(),
@@ -189,9 +214,9 @@ class GridNetBlock_attn(nn.Module):
 
         all_Q, all_K, all_V = [], [], []
         for ii in range(self.n_head):
-            all_Q.append(self["attn_conv_Q_%d" % ii](batch))  # [B, C, T, Q]
-            all_K.append(self["attn_conv_K_%d" % ii](batch))  # [B, C, T, Q]
-            all_V.append(self["attn_conv_V_%d" % ii](batch))  # [B, C, T, Q]
+            all_Q.append(self[f"attn_conv_Q_{ii}"](batch))  # [B, C, T, Q]
+            all_K.append(self[f"attn_conv_K_{ii}"](batch))  # [B, C, T, Q]
+            all_V.append(self[f"attn_conv_V_{ii}"](batch))  # [B, C, T, Q]
 
         Q = torch.cat(all_Q, dim=0)  # [B', C, T, Q]
         K = torch.cat(all_K, dim=0)  # [B', C, T, Q]

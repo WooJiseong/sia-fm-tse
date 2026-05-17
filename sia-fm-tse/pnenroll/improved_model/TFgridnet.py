@@ -1,10 +1,12 @@
-'''
+"""
 Code for the Encoder Fusion Module
 Adopted from the TFGridnet code provided in USEF-TSE: Universal Speaker Embedding Free Target Speaker Extraction
 - https://github.com/ZBang/USEF-TSE
   - Original code licensed under Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0).
 No modification is done as this file contain only the model backbone modules
-'''
+"""
+
+import difflib
 import math
 
 import torch
@@ -13,7 +15,6 @@ import torch.nn.functional as F
 from torch.nn import init
 from torch.nn.parameter import Parameter
 
-import difflib
 
 def get_layer(l_name, library=torch.nn):
     """Return layer object handler from library e.g. from torch.nn
@@ -37,23 +38,22 @@ def get_layer(l_name, library=torch.nn):
             l_name, [x.lower() for x in all_torch_layers]
         )
         raise NotImplementedError(
-            "Layer with name {} not found in {}.\n Closest matches: {}".format(
-                l_name, str(library), close_matches
-            )
+            f"Layer with name {l_name} not found in {str(library)}.\n Closest matches: {close_matches}"
         )
     elif len(match) > 1:
         close_matches = difflib.get_close_matches(
             l_name, [x.lower() for x in all_torch_layers]
         )
         raise NotImplementedError(
-            "Multiple matchs for layer with name {} not found in {}.\n "
-            "All matches: {}".format(l_name, str(library), close_matches)
+            f"Multiple matchs for layer with name {l_name} not found in {str(library)}.\n "
+            f"All matches: {close_matches}"
         )
     else:
         # valid
         layer_handler = getattr(library, match[0])
         return layer_handler
-    
+
+
 class TF_gridnet_attentionblock(nn.Module):
     def __getitem__(self, key):
         return getattr(self, key)
@@ -69,7 +69,6 @@ class TF_gridnet_attentionblock(nn.Module):
     ):
         super().__init__()
         assert activation == "prelu"
-
 
         E = math.ceil(
             approx_qk_dim * 1.0 / n_freqs
@@ -143,7 +142,7 @@ class TF_gridnet_attentionblock(nn.Module):
         V = torch.matmul(attn_mat, V)  # [B', T, C*Q]
 
         # V = V.reshape(old_shape)  # [B', T, C, Q]
-        V = V.reshape([old_shape[0],old_T,old_shape[-2],old_shape[-1]])
+        V = V.reshape([old_shape[0], old_T, old_shape[-2], old_shape[-1]])
         V = V.transpose(1, 2)  # [B', C, T, Q]
         emb_dim = V.shape[1]
 
@@ -153,6 +152,7 @@ class TF_gridnet_attentionblock(nn.Module):
         batch = self["attn_concat_proj"](batch)  # [B, C, T, Q])
 
         return batch
+
 
 class GridNetV2Block(nn.Module):
     def __getitem__(self, key):
@@ -371,7 +371,7 @@ class LayerNormalization4DCF(nn.Module):
         if x.ndim == 4:
             stat_dim = (1, 3)
         else:
-            raise ValueError("Expect x to have 4 dimensions, but got {}".format(x.ndim))
+            raise ValueError(f"Expect x to have 4 dimensions, but got {x.ndim}")
         mu_ = x.mean(dim=stat_dim, keepdim=True)  # [B,1,T,1]
         std_ = torch.sqrt(
             x.var(dim=stat_dim, unbiased=False, keepdim=True) + self.eps
