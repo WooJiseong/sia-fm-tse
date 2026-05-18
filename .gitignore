@@ -1,4 +1,12 @@
+.venv/
+.python-version
+data/LibriSpeech/
+data/wham_noise/
+data/BRIR/
+
 output/
 */__pycache__
 __pycache__/
 model/best.ckpt
+
+credentials.yaml
