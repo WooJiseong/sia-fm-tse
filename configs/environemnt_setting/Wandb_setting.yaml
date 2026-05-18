@@ -1,0 +1,6 @@
+wandb_settings:
+  project: "speaker-extraction-tse"
+  entity: "my-ai-lab"
+  notes: "TFGridNet 기반 Causal Target Speaker Extraction 실험"
+  tags: ["tfgridnet", "causal", "librispeech"]
+  mode: "online"

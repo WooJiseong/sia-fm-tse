@@ -14,3 +14,15 @@ flowse/output/
 flowse/wenetspeech4tts_Premium.pt.tar
 TSE-through-Positive-Negative-Enroll/output/
 TSE-through-Positive-Negative-Enroll/data/
+.venv/
+.python-version
+data/LibriSpeech/
+data/wham_noise/
+data/BRIR/
+
+output/
+*/__pycache__
+__pycache__/
+model/best.ckpt
+
+credentials.yaml

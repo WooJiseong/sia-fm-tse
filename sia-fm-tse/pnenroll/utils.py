@@ -1,8 +1,14 @@
 import yaml
 import importlib
 import json
+import os
 
 def get_config(yaml_config_filename):
+    base_dir = "configs/experiment_setting" # 기본 파일명으로 세팅
+
+    if not yaml_config_filename.startswith("configs/"):
+        yaml_config_filename = os.path.join(base_dir, yaml_config_filename)
+
     with open(yaml_config_filename) as f:
         config_dict = yaml.safe_load(f)
 
