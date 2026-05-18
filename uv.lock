@@ -1326,6 +1326,12 @@ wheels = [
 ]
 
 [[package]]
+name = "pesq"
+version = "0.0.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/e6/f8bdcef3238ac10fb3ce37d150e9b03a152d971febd681f088c6e5e17d8e/pesq-0.0.4.tar.gz", hash = "sha256:b724b28f73fb638522982bd68e8c3c0957e2f45210639a460233b17aa7fc890b", size = 38702, upload-time = "2022-05-17T14:15:26.301Z" }
+
+[[package]]
 name = "platformdirs"
 version = "4.9.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1859,6 +1865,7 @@ dependencies = [
     { name = "onnxruntime" },
     { name = "opt-einsum" },
     { name = "packaging" },
+    { name = "pesq" },
     { name = "platformdirs" },
     { name = "pooch" },
     { name = "protobuf" },
@@ -1971,6 +1978,7 @@ requires-dist = [
     { name = "onnxruntime", specifier = "==1.23.2" },
     { name = "opt-einsum", specifier = "==3.4.0" },
     { name = "packaging", specifier = "==26.0" },
+    { name = "pesq", specifier = ">=0.0.4" },
     { name = "platformdirs", specifier = "==4.9.6" },
     { name = "pooch", specifier = "==1.9.0" },
     { name = "protobuf", specifier = "==7.34.1" },
