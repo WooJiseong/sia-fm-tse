@@ -110,7 +110,7 @@ class TFGridNet_KVfusion(nn.Module):
             neg_cond = neg_cond.transpose(2, 3) # [B, C, F, T]
             neg_cond = neg_cond.flatten(0, 1) # [B*C, F, T]
 
-            mean_neg, std_neg = stat_pool1d(input=pos_cond, kernel_size=self.pooling_size, stride=self.stride)
+            mean_neg, std_neg = stat_pool1d(input=neg_cond, kernel_size=self.pooling_size, stride=self.stride)
         
             mean_neg = mean_neg.unflatten(dim=0, sizes=(B, C)) # [B, C, F, T']
             std_neg = std_neg.unflatten(dim=0, sizes=(B, C))
