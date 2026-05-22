@@ -328,7 +328,7 @@ class Tar_Model(nn.Module):
         self,
         pos: torch.Tensor,
         neg: torch.Tensor,
-    ):
+    ) -> tuple[torch.Tensor, None, None]:
         """
         Produce a conditioning embedding from a positive and negative reference pair.
 
@@ -416,7 +416,7 @@ class Tar_Model(nn.Module):
         else:
             return einops.rearrange(est_source, "b 1 n -> b n")  # [B, n_samples]
 
-    def forward(self, x: torch.Tensor, emb: torch.Tensor):
+    def forward(self, x: torch.Tensor, emb: torch.Tensor) -> torch.Tensor:
         """
         Full forward pass: encode -> condition -> refine -> decode.
 
