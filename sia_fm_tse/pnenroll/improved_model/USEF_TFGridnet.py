@@ -14,7 +14,10 @@ import einops
 import torch
 import torch.nn as nn
 
-from improved_model.TFgridnet import GridNetV2Block, TFGridNetBlockAttn
+from sia_fm_tse.pnenroll.improved_model.TFgridnet import (
+    GridNetV2Block,
+    TFGridNetBlockAttn,
+)
 
 
 class STFT(nn.Module):

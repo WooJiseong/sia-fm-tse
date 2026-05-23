@@ -9,15 +9,16 @@ import humanize
 import psutil
 import torch
 from attrdict import AttrDict
-from dataset.LibriSpeech_single_emb import LibriDataset_single_emb
-from improved_model.USEF_TFGridnet import Tar_Model
 from torch import nn
 from torch.utils.data import DataLoader
 from torchmetrics.audio import ScaleInvariantSignalDistortionRatio
 from torchmetrics.functional import scale_invariant_signal_noise_ratio as si_snr_loss
 from torchmetrics.functional import signal_noise_ratio as snr_loss
 from tqdm import tqdm
-from utils import Config, get_config
+
+from sia_fm_tse.pnenroll.dataset.LibriSpeech_single_emb import LibriDataset_single_emb
+from sia_fm_tse.pnenroll.improved_model.USEF_TFGridnet import Tar_Model
+from sia_fm_tse.pnenroll.utils import Config, get_config
 
 config = get_config(sys.argv[1])
 os.environ["CUDA_VISIBLE_DEVICES"] = config.gpu

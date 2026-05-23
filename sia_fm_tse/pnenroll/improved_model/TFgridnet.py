@@ -15,7 +15,7 @@ from espnet2.torch_utils.get_layer_from_string import get_layer
 from torch.nn.functional import pad, softmax, unfold
 from torch.nn.parameter import Parameter
 
-from improved_model.GridnetAttnHead import LayerNormalization4DCF
+from sia_fm_tse.pnenroll.improved_model.GridnetAttnHead import LayerNormalization4DCF
 
 
 class TFGridNetBlockAttn(nn.Module):

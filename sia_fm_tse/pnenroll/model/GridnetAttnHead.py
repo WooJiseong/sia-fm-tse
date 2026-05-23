@@ -1,18 +1,20 @@
-'''
+"""
 Code for the Encoder Fusion Module
 Adopted from the TFGridnet code provided in ESPnet: end-to-end speech processing toolkit and LookOnceToHear
 - ESPnet: https://github.com/espnet/espnet
 - LookOnceToHear: https://github.com/vb000/lookoncetohear
 The modification includes the concatenation of the input two embedding sequences, and the addition of Segmentation Embeddings
-'''
+"""
+
 import math
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from espnet2.torch_utils.get_layer_from_string import get_layer
 from torch.nn import init
 from torch.nn.parameter import Parameter
-from espnet2.torch_utils.get_layer_from_string import get_layer
+
 
 class LayerNormalization4DCF(nn.Module):
     def __init__(self, input_dimension, eps=1e-5):
@@ -37,8 +39,11 @@ class LayerNormalization4DCF(nn.Module):
         x_hat = ((x - mu_) / std_) * self.gamma + self.beta
         return x_hat
 
+
 class GridNetBlock_attnhead(nn.Module):
-    def __init__(self, layer_num, pooling_size, stride, return_clean_dvec=False, out_dim=0):
+    def __init__(
+        self, layer_num, pooling_size, stride, return_clean_dvec=False, out_dim=0
+    ):
         super().__init__()
 
         self.pooling_size = pooling_size
@@ -56,7 +61,8 @@ class GridNetBlock_attnhead(nn.Module):
                     n_freqs=65,
                     n_head=4,
                     eps=1.0e-5,
-                ))
+                )
+            )
         if return_clean_dvec:
             self.embed_proj = nn.Sequential(
                 nn.Linear(65 * 64, 256),
@@ -64,27 +70,38 @@ class GridNetBlock_attnhead(nn.Module):
             )
 
         if out_dim != 0:
-            assert not return_clean_dvec, "hotfix for now: linear project for stylespeech is different from dvec output"
+            assert not return_clean_dvec, (
+                "hotfix for now: linear project for stylespeech is different from dvec output"
+            )
             self.embed_proj = nn.Sequential(
                 nn.Linear(65 * 64, out_dim),
             )
-            
+
     def forward(self, pos_cond, neg_cond):
         B, C, T_pos, F = pos_cond.shape
         B, C, T_neg, F = neg_cond.shape
 
-        x = torch.concat([pos_cond, neg_cond], dim=2) # [B, C, 2T', F]
+        x = torch.concat([pos_cond, neg_cond], dim=2)  # [B, C, 2T', F]
 
-        seg_idx = torch.concat([torch.zeros((B, T_pos), device=pos_cond.device), torch.ones((B, T_neg), device=pos_cond.device)], dim=1)
-        seg_emb = self.segment_embedding(seg_idx.to(torch.int32)) # [B, 2T', C * F]
-        seg_emb = seg_emb.unflatten(dim=2, sizes=(C, F)).permute((0, 2, 1, 3)) # [B, C, 2T', F]
-        
+        seg_idx = torch.concat(
+            [
+                torch.zeros((B, T_pos), device=pos_cond.device),
+                torch.ones((B, T_neg), device=pos_cond.device),
+            ],
+            dim=1,
+        )
+        seg_emb = self.segment_embedding(seg_idx.to(torch.int32))  # [B, 2T', C * F]
+        seg_emb = seg_emb.unflatten(dim=2, sizes=(C, F)).permute(
+            (0, 2, 1, 3)
+        )  # [B, C, 2T', F]
+
         x = x + seg_emb
 
         for layer in self.model[:-1]:
             x = x + layer(x)
         x = self.model[-1](x)
         return x
+
 
 class GridNetBlock_attn(nn.Module):
     def __getitem__(self, key):

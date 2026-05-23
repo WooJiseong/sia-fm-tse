@@ -14,13 +14,14 @@ import humanize
 import numpy as np
 import psutil
 import torch
-from dataset.LibriSpeech_single_emb import LibriDataset_single_emb
 from torch import nn
 from torchmetrics.functional import scale_invariant_signal_noise_ratio as si_snr_loss
 from torchmetrics.functional import signal_distortion_ratio as si_sdr_loss
 from torchmetrics.functional import signal_noise_ratio as snr_loss
 from tqdm import tqdm
-from utils import *
+
+from sia_fm_tse.pnenroll.dataset.LibriSpeech_single_emb import LibriDataset_single_emb
+from sia_fm_tse.pnenroll.utils import *
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
