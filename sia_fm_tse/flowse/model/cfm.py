@@ -87,7 +87,8 @@ class CFM(nn.Module):
         cfg_strength=1.0,
         vocoder: Callable[[float["b d n"]], float["b nw"]] | None = None,  # noqa: F722
         no_ref_audio=False,
-        drop_text=False
+        drop_text=False,
+        cond_emb=None,
     ):
         self.eval()
         # raw wave
@@ -125,15 +126,29 @@ class CFM(nn.Module):
 
         def fn(t, x):
     
-            pred = self.transformer(
-                x=x, cond=step_cond, text=text, time=t, mask=mask, drop_audio_cond=False, drop_text=drop_text
-            )
+            if cond_emb is None:
+                pred = self.transformer(
+                    x=x, cond=step_cond, text=text, time=t, mask=mask,
+                    drop_audio_cond=False, drop_text=drop_text
+                )
+            else:
+                pred = self.transformer(
+                    x=x, cond=step_cond, text=text, time=t, mask=mask,
+                    drop_audio_cond=False, drop_text=drop_text, cond_emb=cond_emb
+                )
             if cfg_strength < 1e-5:
                 return pred
 
-            null_pred = self.transformer(
-                x=x, cond=step_cond, text=text, time=t, mask=mask, drop_audio_cond=True, drop_text=True
-            )
+            if cond_emb is None:
+                null_pred = self.transformer(
+                    x=x, cond=step_cond, text=text, time=t, mask=mask,
+                    drop_audio_cond=True, drop_text=True
+                )
+            else:
+                null_pred = self.transformer(
+                    x=x, cond=step_cond, text=text, time=t, mask=mask,
+                    drop_audio_cond=True, drop_text=True, cond_emb=cond_emb
+                )
             return pred + (pred - null_pred) * cfg_strength
 
         y0 = torch.randn_like(cond)
