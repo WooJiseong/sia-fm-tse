@@ -260,7 +260,7 @@ def main_func(log: TextIO, args: Config):
     )
 
     # ======== lookonce encoder ==========
-    from model.tfgridnet_encoder import TFGridNet_encoder
+    from sia_fm_tse.pnenroll.model.tfgridnet_encoder import TFGridNet_encoder
 
     encoder = TFGridNet_encoder(
         num_ch=2,
@@ -270,7 +270,7 @@ def main_func(log: TextIO, args: Config):
         binaural=args.binaural,
     )
 
-    from improved_model.GridnetAttnHead import GridNetBlockAttnHead
+    from sia_fm_tse.pnenroll.improved_model.GridnetAttnHead import GridNetBlockAttnHead
 
     assert (
         isinstance(args.refine_layer_num, int)
@@ -291,7 +291,7 @@ def main_func(log: TextIO, args: Config):
 
     # ======== model ========
     if args.model_name == "USEF-TFGridnet":
-        from improved_model.USEF_TFGridnet import Tar_Model
+        from sia_fm_tse.pnenroll.improved_model.USEF_TFGridnet import Tar_Model
 
         assert (  # fmt: skip
             isinstance(args.hidden_channels, int)
@@ -326,7 +326,7 @@ def main_func(log: TextIO, args: Config):
         )
 
     # ======== frozen lookoncetohear encoder to distill againest ==========
-    from model.tfgridnet_encoder import TFGridNet_encoder
+    from sia_fm_tse.pnenroll.model.tfgridnet_encoder import TFGridNet_encoder
 
     frozen_encoder_param = os.path.join("model", "best.ckpt")
     frozen_encoder_param = torch.load(

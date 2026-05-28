@@ -1,12 +1,13 @@
-import os
 import glob
+import os
+
 import torch
 import torch.nn as nn
 import torchaudio
 import yaml
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
 
-from model import DiT, CFM
+from sia_fm_tse.flowse.model import CFM, DiT
 
 
 class PNCacheDataset(Dataset):
@@ -21,9 +22,9 @@ class PNCacheDataset(Dataset):
     def __getitem__(self, idx):
         item = torch.load(self.files[idx], map_location="cpu")
 
-        mix_wave = item["mix_wave"].squeeze(0).squeeze(0)        # [96000]
+        mix_wave = item["mix_wave"].squeeze(0).squeeze(0)  # [96000]
         target_wave = item["target_wave"].squeeze(0).squeeze(0)  # [96000]
-        cond_emb = item["cond_emb"].squeeze(0)                   # [64, 751, 65]
+        cond_emb = item["cond_emb"].squeeze(0)  # [64, 751, 65]
         sr = item["sample_rate"]
 
         return mix_wave, target_wave, cond_emb, sr
@@ -39,11 +40,11 @@ class PNAdapterFlowSE(nn.Module):
         nn.init.zeros_(self.spk_proj.bias)
 
     def forward(self, noisy_mel, clean_mel, text, cond_emb):
-        c_spk = cond_emb.mean(dim=(2, 3))      # [B, 64]
-        spk = self.spk_proj(c_spk)             # [B, 100]
-        spk = spk[:, None, :]                  # [B, 1, 100]
+        c_spk = cond_emb.mean(dim=(2, 3))  # [B, 64]
+        spk = self.spk_proj(c_spk)  # [B, 100]
+        spk = spk[:, None, :]  # [B, 1, 100]
 
-        speaker_cond_mel = noisy_mel + spk     # [B, N, 100]
+        speaker_cond_mel = noisy_mel + spk  # [B, N, 100]
 
         return self.cfm(
             inp=speaker_cond_mel,
@@ -174,13 +175,13 @@ for epoch in range(NUM_EPOCHS):
             with torch.no_grad():
                 spk_norm = model.spk_proj(cond_emb.mean(dim=(2, 3))).norm().item()
             print(
-                f"epoch {epoch+1:03d} | step {global_step:05d} | "
+                f"epoch {epoch + 1:03d} | step {global_step:05d} | "
                 f"loss {loss.item():.6f} | avg_loss {total_loss / count:.6f} | "
                 f"spk_norm {spk_norm:.6f}"
             )
 
     epoch_loss = total_loss / max(count, 1)
-    print(f"epoch {epoch+1:03d} done | epoch_loss {epoch_loss:.6f}")
+    print(f"epoch {epoch + 1:03d} done | epoch_loss {epoch_loss:.6f}")
 
     torch.save(
         {
@@ -189,7 +190,7 @@ for epoch in range(NUM_EPOCHS):
             "spk_proj": model.spk_proj.state_dict(),
             "epoch_loss": epoch_loss,
         },
-        f"output/pn_adapter_bs{BATCH_SIZE}_epoch{epoch+1}.pt",
+        f"output/pn_adapter_bs{BATCH_SIZE}_epoch{epoch + 1}.pt",
     )
 
 print("dataset adapter training done")

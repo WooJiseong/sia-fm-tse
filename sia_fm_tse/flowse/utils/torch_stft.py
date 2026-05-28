@@ -5,8 +5,6 @@ import torch.nn.functional as tf
 import torchaudio
 
 
-
-
 class STFT(nn.Module):
     def __init__(self, win_len, hop_len, fft_len, win_type):
         super(STFT, self).__init__()
@@ -14,7 +12,6 @@ class STFT(nn.Module):
         self.nfft = fft_len
         self.win_type = win_type
 
-        
         window = {
             "hann": th.hann_window(win_len),
             "hamm": th.hamming_window(win_len),
@@ -28,7 +25,7 @@ class STFT(nn.Module):
         inp: N x L
         out: N x F x T x C
         """
-      
+
         cspec = th.stft(
             inp,
             self.nfft,
@@ -54,5 +51,3 @@ class STFT(nn.Module):
         return th.istft(
             inp, self.nfft, self.hop, self.win, self.window_synthesis.to(real.device)
         )
-
-

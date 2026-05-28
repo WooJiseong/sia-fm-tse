@@ -1,26 +1,29 @@
-import numpy as np
-import numpy
+import json
 import math
-import soundfile as sf
-import scipy.signal as sps
-import librosa
+import multiprocessing as mp
+import os
 import random
-import torch.nn.functional as F
+import sys
+
+import librosa
+import numpy
+import numpy as np
+import scipy.signal as sps
+import soundfile as sf
 import torch
 import torch as th
-import torchaudio
+import torch.nn.functional as F
 import torch.utils.data as tud
-from torch.utils.data import DataLoader, Dataset,SequentialSampler,Sampler
-import multiprocessing as mp
-from torch.utils.data.distributed import DistributedSampler
+import torchaudio
 import yaml
-import os
-from pypinyin import pinyin, lazy_pinyin,Style
+from pypinyin import Style, lazy_pinyin, pinyin
+from torch.utils.data import DataLoader, Dataset, Sampler, SequentialSampler
+from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
-import json
-import sys
+
 sys.path.append("../")
-from model.modules import MelSpec
+from sia_fm_tse.flowse.model.modules import MelSpec
+
 EPS = np.finfo(float).eps
 
 
@@ -45,7 +48,6 @@ def get_firstchannel_read(path, fs=16000):
     return wave_data
 
 
-
 def audioread(path, fs=16000):
     """
     args
@@ -55,14 +57,12 @@ def audioread(path, fs=16000):
         wave_data: L x C or L
     """
     wave_data, sr = torchaudio.load(path)
-    
+
     if sr != fs:
         resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=fs)
         wave_data = resampler(wave_data)
-    
-    return wave_data.transpose(0,1)
 
-
+    return wave_data.transpose(0, 1)
 
 
 def add_reverb(cln_wav, rir_wav):
@@ -77,13 +77,13 @@ def db2num(y):
     return torch.pow(10.0, y / 20.0)
 
 
-def parse_scp(scp, path_list,test=-1, split_token=" "):
+def parse_scp(scp, path_list, test=-1, split_token=" "):
     with open(scp) as fid:
-        if not test== -1:
+        if not test == -1:
             total = 500
             count = 0
         for line in fid:
-            if not test==-1:
+            if not test == -1:
                 if count > total:
                     break
                 count += 1
@@ -140,7 +140,9 @@ def generate_data_one_noise(
 
     # Final check to see if there are any amplitudes exceeding +/- 1. If so, normalize all the signals accordingly
     if is_clipped(noisyspeech):
-        noisyspeech_maxamplevel =torch.max(torch.abs(noisyspeech))  / (clipping_threshold - EPS)
+        noisyspeech_maxamplevel = torch.max(torch.abs(noisyspeech)) / (
+            clipping_threshold - EPS
+        )
         noisyspeech = noisyspeech / noisyspeech_maxamplevel
         clean = clean / noisyspeech_maxamplevel
 
@@ -193,7 +195,9 @@ def generate_data_two_noise(
 
     # Final check to see if there are any amplitudes exceeding +/- 1. If so, normalize all the signals accordingly
     if is_clipped(noisyspeech):
-        noisyspeech_maxamplevel = torch.max(torch.abs(noisyspeech)) / (clipping_threshold - EPS)
+        noisyspeech_maxamplevel = torch.max(torch.abs(noisyspeech)) / (
+            clipping_threshold - EPS
+        )
         noisyspeech = noisyspeech / noisyspeech_maxamplevel
         clean = clean / noisyspeech_maxamplevel
 
@@ -242,9 +246,7 @@ def generate_reverdata_one_reverb_noise_one_noise(
     return noisyspeech, clean
 
 
-
 class AutoDataset(Dataset):
-
     def __init__(
         self,
         clean_scp,
@@ -264,10 +266,10 @@ class AutoDataset(Dataset):
         self.clean_list = mgr.list()
         self.regular_noise_list = mgr.list()
         self.rir_list = mgr.list()
-        
+
         self.probaction = list(probability.keys())
         self.probvalues = list(probability.values())
-    
+
         self.snr_ranges = snr_ranges
         self.scale_ranges = scale_ranges
         self.index = mgr.list()
@@ -290,26 +292,24 @@ class AutoDataset(Dataset):
             p.join()
         # init
 
-
         self.len_clean = len(self.clean_list)
         self.len_regular_noise = len(self.regular_noise_list)
         self.len_rir = len(self.rir_list)
 
         self.index = self.clean_list
         self.index *= repeat
-        
+
         with open(text_scp, "r") as file:
-            self.text_list = json.load(file)  
-    
+            self.text_list = json.load(file)
 
         self.mel_spectrogram = MelSpec(
-                    n_fft=1024,
-                    hop_length=256,
-                    win_length=1024,
-                    n_mel_channels=100,
-                    target_sample_rate=24000,
-                    mel_spec_type='vocos',
-                )
+            n_fft=1024,
+            hop_length=256,
+            win_length=1024,
+            n_mel_channels=100,
+            target_sample_rate=24000,
+            mel_spec_type="vocos",
+        )
         self.randstates = [np.random.RandomState(idx) for idx in range(3000)]
         self.resampler = torchaudio.transforms.Resample(orig_freq=16000, new_freq=24000)
 
@@ -335,9 +335,8 @@ class AutoDataset(Dataset):
         return rand_number
 
     def get_frame_len(self, index):
-        
-        return self.index[index]["duration"] * 24000 / 256
 
+        return self.index[index]["duration"] * 24000 / 256
 
     def __getitem__(self, index):
         data_info = self.index[index]
@@ -345,21 +344,20 @@ class AutoDataset(Dataset):
         # import pdb;pdb.set_trace()
         item_key = os.path.splitext(os.path.basename(clean_path))[0]
         if not item_key in self.text_list.keys():
-            text = ''
+            text = ""
         else:
             text = self.text_list[item_key]
-
 
         clean = get_firstchannel_read(clean_path)
 
         chunk_length = clean.shape[-1]
-      
+
         randstate = self.randstates[(index + 11) % 3000]
 
         idx_noise1 = randstate.randint(0, self.len_regular_noise)
         idx_noise2 = randstate.randint(0, self.len_regular_noise)
         # Two different noise samples
-        
+
         while idx_noise2 == idx_noise1:
             idx_noise2 = randstate.randint(0, self.len_regular_noise)
         idx_rir = randstate.randint(0, self.len_rir)
@@ -375,13 +373,13 @@ class AutoDataset(Dataset):
         scale = self.__select_rand_number__(self.scale_ranges, randstate)
 
         choice = self.__next_probaiblity__()
-        
-        if choice == 'p1':
+
+        if choice == "p1":
             noise1 = get_firstchannel_read(noise1_path)
             noise1 = pad(noise1, chunk_length, randstate)
             inputs, labels = generate_data_one_noise(clean, noise1, snr1, scale)
             desc = f"p1|{self.name(clean_path)}|{self.name(noise1_path)}|{snr1}|{scale}"
-        elif choice == 'p2':
+        elif choice == "p2":
             noise1 = get_firstchannel_read(noise1_path)
             noise2 = get_firstchannel_read(noise2_path)
             noise1 = pad(noise1, chunk_length, randstate)
@@ -390,7 +388,7 @@ class AutoDataset(Dataset):
                 clean, noise1, noise2, snr1, snr2, scale
             )
             desc = f"p2|{self.name(clean_path)}|{self.name(noise1_path)}|{self.name(noise2_path)}|{snr1}_{snr2}|{scale}"
-        elif choice == 'p3':
+        elif choice == "p3":
             noise1 = get_firstchannel_read(noise1_path)
             noise1 = pad(noise1, chunk_length, randstate)
             rir = audioread(rir_path)
@@ -398,7 +396,7 @@ class AutoDataset(Dataset):
                 clean, noise1, rir, snr1, scale
             )
             desc = f"p3|{self.name(clean_path)}|{self.name(noise1_path)}|{self.name(rir_path)}|{snr1}|{scale}"
-        elif choice == 'p4':
+        elif choice == "p4":
             noise1 = get_firstchannel_read(noise1_path)
             noise2 = get_firstchannel_read(noise2_path)
             noise1 = pad(noise1, chunk_length, randstate)
@@ -408,7 +406,7 @@ class AutoDataset(Dataset):
                 clean, noise1, noise2, rir, snr1, snr2, scale
             )
             desc = f"p4|{self.name(clean_path)}|{self.name(noise1_path)}|{self.name(noise2_path)}|{self.name(rir_path)}|{snr1}_{snr2}|{scale}"
-        elif choice == 'p5':
+        elif choice == "p5":
             noise1 = get_firstchannel_read(noise1_path)
             noise1 = pad(noise1, chunk_length, randstate)
             rir = audioread(rir_path)
@@ -427,23 +425,30 @@ class AutoDataset(Dataset):
             )
             desc = f"p6|{self.name(clean_path)}|{self.name(noise1_path)}|{self.name(noise2_path)}|{self.name(rir_path)}|{snr1}_{snr2}|{scale}"
 
-
         inputs = inputs.unsqueeze(0)
         labels = labels.unsqueeze(0)
-        
+
         inputs = self.resampler(inputs)
         labels = self.resampler(labels)
 
         noisy_mel_spec = self.mel_spectrogram(inputs)
         noisy_mel_spec = noisy_mel_spec.squeeze(0)  # '1 d t -> d t'
-        
+
         label_mel_spec = self.mel_spectrogram(labels)
         label_mel_spec = label_mel_spec.squeeze(0)  # '1 d t -> d t'
         raw_text = text
         text_list = pinyin(text, style=Style.TONE3)
-        text = [''.join(item) for item in text_list]
+        text = ["".join(item) for item in text_list]
 
-        egs = {"noisy":inputs,"clean":labels,"label_mel_spec": label_mel_spec, "noisy_mel_spec": noisy_mel_spec, "label_path":clean_path,"text": text ,"raw_text":raw_text}
+        egs = {
+            "noisy": inputs,
+            "clean": labels,
+            "label_mel_spec": label_mel_spec,
+            "noisy_mel_spec": noisy_mel_spec,
+            "label_path": clean_path,
+            "text": text,
+            "raw_text": raw_text,
+        }
         return egs
 
 
@@ -475,20 +480,19 @@ def collate_fn(batch):
     max_mel_length = label_mel_lengths.amax()
 
     padded_label_mel_specs = []
-    for spec in label_mel_specs:  
+    for spec in label_mel_specs:
         padding = (0, max_mel_length - spec.size(-1))
         padded_spec = F.pad(spec, padding, value=0)
         padded_label_mel_specs.append(padded_spec)
 
     label_mel_specs = torch.stack(padded_label_mel_specs)
 
-
     noisy_mel_specs = [item["noisy_mel_spec"].squeeze(0) for item in batch]
     noisy_mel_lengths = torch.LongTensor([spec.shape[-1] for spec in noisy_mel_specs])
     max_mel_length = noisy_mel_lengths.amax()
 
     padded_noisy_mel_specs = []
-    for spec in noisy_mel_specs:  
+    for spec in noisy_mel_specs:
         padding = (0, max_mel_length - spec.size(-1))
         padded_spec = F.pad(spec, padding, value=0)
         padded_noisy_mel_specs.append(padded_spec)
@@ -496,7 +500,7 @@ def collate_fn(batch):
     noisy_mel_specs = torch.stack(padded_noisy_mel_specs)
     label_paths = []
     for item in batch:
-        label_paths.append(item['label_path'])
+        label_paths.append(item["label_path"])
 
     text = [item["text"] for item in batch]
     text_lengths = torch.LongTensor([len(item) for item in text])
@@ -511,8 +515,7 @@ def collate_fn(batch):
         text_lengths=text_lengths,
     )
 
-        
-            
+
 class DynamicBatchSampler(Sampler[list[int]]):
     """Extension of Sampler that will do the following:
     1.  Change the batch size (essentially number of sequences)
@@ -522,40 +525,53 @@ class DynamicBatchSampler(Sampler[list[int]]):
     """
 
     def __init__(
-        self, sampler: Sampler[int], frames_threshold: int, max_samples=0, random_seed=None, drop_last: bool = False
+        self,
+        sampler: Sampler[int],
+        frames_threshold: int,
+        max_samples=0,
+        random_seed=None,
+        drop_last: bool = False,
     ):
         self.sampler = sampler
         self.frames_threshold = frames_threshold
         self.max_samples = max_samples
-        
-        # The difference between adjacent frames within a batch. 
+
+        # The difference between adjacent frames within a batch.
         # If the difference is too large, the smaller one will be padded with many frames in the collate_fn, which may cause out-of-memory issues.
         self.max_diff = 1.5
-        
+
         indices, batches = [], []
         data_source = self.sampler.data_source
 
         for idx in tqdm(
-            self.sampler, desc="Sorting with sampler... if slow, check whether dataset is provided with duration"
+            self.sampler,
+            desc="Sorting with sampler... if slow, check whether dataset is provided with duration",
         ):
             indices.append((idx, data_source.get_frame_len(idx)))
-        indices.sort(key=lambda elem: elem[1],reverse=True)
+        indices.sort(key=lambda elem: elem[1], reverse=True)
 
         batch = []
         batch_frames = 0
-        
+
         # import pdb;pdb.set_trace()
-        
+
         for idx, frame_len in tqdm(
-            indices, desc=f"Creating dynamic batches with {frames_threshold} audio frames per gpu"
+            indices,
+            desc=f"Creating dynamic batches with {frames_threshold} audio frames per gpu",
         ):
             if len(batch) > 0:
-                prev_frame_len = data_source.get_frame_len(batch[-1])  
-                frame_diff = max(prev_frame_len/frame_len,frame_len/prev_frame_len) 
+                prev_frame_len = data_source.get_frame_len(batch[-1])
+                frame_diff = max(prev_frame_len / frame_len, frame_len / prev_frame_len)
             else:
-                frame_diff = float('inf')  # If the current batch is empty, set a large difference to ensure the first frame is added
-            
-            if batch_frames + frame_len <= self.frames_threshold and (max_samples == 0 or len(batch) < max_samples) and frame_diff <= self.max_diff:
+                frame_diff = float(
+                    "inf"
+                )  # If the current batch is empty, set a large difference to ensure the first frame is added
+
+            if (
+                batch_frames + frame_len <= self.frames_threshold
+                and (max_samples == 0 or len(batch) < max_samples)
+                and frame_diff <= self.max_diff
+            ):
                 batch.append(idx)
                 batch_frames += frame_len
             else:
@@ -573,7 +589,6 @@ class DynamicBatchSampler(Sampler[list[int]]):
 
         del indices
 
-       
         random.seed(random_seed)
         random.shuffle(batches)
 
@@ -584,6 +599,7 @@ class DynamicBatchSampler(Sampler[list[int]]):
 
     def __len__(self):
         return len(self.batches)
+
 
 def make_auto_loader(
     clean_scp,
@@ -611,8 +627,7 @@ def make_auto_loader(
         snr_ranges=snr_ranges,
         scale_ranges=scale_ranges,
     )
-    
-    
+
     sampler = SequentialSampler(dataset)
     batch_sampler = DynamicBatchSampler(
         sampler, batch_size, max_samples=max_samples, random_seed=2102, drop_last=True
@@ -625,5 +640,4 @@ def make_auto_loader(
         persistent_workers=True,
         batch_sampler=batch_sampler,
     )
-    return sampler,loader
-
+    return sampler, loader

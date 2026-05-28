@@ -1,7 +1,7 @@
 import torch
 import yaml
 
-from model import DiT, CFM
+from sia_fm_tse.flowse.model import CFM, DiT
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("device:", device)

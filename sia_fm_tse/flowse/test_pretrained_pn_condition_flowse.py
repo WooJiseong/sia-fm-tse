@@ -3,7 +3,7 @@ import torch.nn as nn
 import torchaudio
 import yaml
 
-from model import DiT, CFM
+from sia_fm_tse.flowse.model import CFM, DiT
 
 
 class SpeakerConditionedCFM(nn.Module):
@@ -17,14 +17,14 @@ class SpeakerConditionedCFM(nn.Module):
         nn.init.zeros_(self.spk_proj.bias)
 
     def wav_to_mel(self, wav):
-        mel = self.cfm.mel_spec(wav)      # [B, mel, T]
-        mel = mel.permute(0, 2, 1)        # [B, T, mel]
+        mel = self.cfm.mel_spec(wav)  # [B, mel, T]
+        mel = mel.permute(0, 2, 1)  # [B, T, mel]
         return mel
 
     def forward(self, mix_wave, target_wave, text, cond_emb):
-        c_spk = cond_emb.mean(dim=(2, 3))     # [B,64]
-        spk = self.spk_proj(c_spk)            # [B,100]
-        spk = spk[:, None, :]                 # [B,1,100]
+        c_spk = cond_emb.mean(dim=(2, 3))  # [B,64]
+        spk = self.spk_proj(c_spk)  # [B,100]
+        spk = spk[:, None, :]  # [B,1,100]
 
         noisy_mel = self.wav_to_mel(mix_wave)
         clean_mel = self.wav_to_mel(target_wave)
@@ -90,15 +90,17 @@ print("checkpoint best_loss:", ckpt.get("best_loss"))
 # ===== load real PN condition sample =====
 data = torch.load("../bridge_outputs/pn_condition_sample.pt", map_location="cpu")
 
-mix_wave = data["mix_wave"].squeeze(1).to(device)       # [B,wav]
-target_wave = data["target_wave"].squeeze(1).to(device) # [B,wav]
-cond_emb = data["cond_emb"].to(device)                  # [B,64,751,65]
+mix_wave = data["mix_wave"].squeeze(1).to(device)  # [B,wav]
+target_wave = data["target_wave"].squeeze(1).to(device)  # [B,wav]
+cond_emb = data["cond_emb"].to(device)  # [B,64,751,65]
 sr = data["sample_rate"]
 
 # FlowSE mel spec is 24k
 target_sr = mel_conf["target_sample_rate"]
 if sr != target_sr:
-    resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=target_sr).to(device)
+    resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=target_sr).to(
+        device
+    )
     mix_wave = resampler(mix_wave)
     target_wave = resampler(target_wave)
 

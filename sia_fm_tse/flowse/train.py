@@ -1,36 +1,29 @@
-import sys
-import time
-import yaml
+import argparse
+import os
 import pprint
 import random
-import argparse
-import numpy as np
+import sys
+import time
+import warnings
 from pathlib import Path
+
+import numpy as np
 import torch
-import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
-
-
+import torch.nn as nn
+import torchaudio
+import yaml
+from accelerate import Accelerator
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils import clip_grad_norm_
-import torchaudio
-from torch.optim.lr_scheduler import LinearLR, SequentialLR
 from torch.optim import AdamW
-from accelerate import Accelerator
-from utils.logger import get_logger
+from torch.optim.lr_scheduler import LinearLR, SequentialLR
 
-
-from model import DiT,CFM
-from model.model_utils import get_tokenizer
-
-
-import os
-from loader.dataloader import make_auto_loader
-
-
-
-import warnings
+from sia_fm_tse.flowse.loader.dataloader import make_auto_loader
+from sia_fm_tse.flowse.model import CFM, DiT
+from sia_fm_tse.flowse.model.model_utils import get_tokenizer
+from sia_fm_tse.flowse.utils.logger import get_logger
 
 warnings.filterwarnings("ignore")
 
@@ -42,7 +35,7 @@ from datetime import datetime
 
 
 def make_dataloader(opt):
-    
+
     train_sampler, train_loader = make_auto_loader(
         **opt["datasets"]["train"],
         **opt["datasets"]["dataloader_setting"],
@@ -73,7 +66,7 @@ def save_checkpoint(
         "epoch": epoch,
         "model_state_dict": nnet.module.state_dict(),
         "optim_state_dict": optimizer.state_dict(),
-        "scheduler_state_dict": scheduler.state_dict(),  
+        "scheduler_state_dict": scheduler.state_dict(),
         "best_loss": best_loss,
     }
     cpt_name = "{0}.pt.tar".format("best" if best else "last")
@@ -84,8 +77,6 @@ def save_checkpoint(
         torch.save(cpt, checkpoint_dir / f"{epoch}_{step}.pt.tar")
     elif save_period > 0 and epoch % save_period == 0:
         torch.save(cpt, checkpoint_dir / f"{epoch}.pt.tar")
-    
-    
 
 
 def make_optimizer(params, opt):
@@ -227,22 +218,20 @@ def train_one_epcoh(
 
     end = time.time()
     for i, egs in enumerate(train_loader):
-
-        
         egs = load_obj(egs, device)
         data_time.update(time.time() - end)
-        noisy = egs["noisy_mel"].transpose(-1,-2)
-        label = egs["label_mel"].transpose(-1,-2)
+        noisy = egs["noisy_mel"].transpose(-1, -2)
+        label = egs["label_mel"].transpose(-1, -2)
         text = egs["text"]
-    
-        loss, _, _ = nnet(inp=noisy, clean=label,text=text)
-    
+
+        loss, _, _ = nnet(inp=noisy, clean=label, text=text)
+
         torch.distributed.barrier()
         reduced_loss = reduce_mean(loss, world_size)
         losses.update(reduced_loss.item(), noisy.size(0))
-        
+
         optimizer.zero_grad()
-    
+
         loss.backward()
 
         clip_grad_norm_(nnet.parameters(), conf["optim"]["gradient_clip"])
@@ -253,8 +242,6 @@ def train_one_epcoh(
 
         if i % conf["logger"]["print_freq"] == 0 and local_rank == 0:
             progress.display(i)
-            
-        
 
     if local_rank == 0:
         progress.display(len(train_loader))
@@ -286,20 +273,20 @@ def validate_one_epcoh(
 
     nnet.eval()
 
-    resampler = torchaudio.transforms.Resample(orig_freq = 16000, new_freq = 24000).to(torch.device("cuda", local_rank))
+    resampler = torchaudio.transforms.Resample(orig_freq=16000, new_freq=24000).to(
+        torch.device("cuda", local_rank)
+    )
     with torch.no_grad():
         end = time.time()
         for i, egs in enumerate(val_loader):
-            
-            
             egs = load_obj(egs, device)
 
-            noisy = egs["noisy_mel"].transpose(-1,-2)
-            label = egs["label_mel"].transpose(-1,-2)
+            noisy = egs["noisy_mel"].transpose(-1, -2)
+            label = egs["label_mel"].transpose(-1, -2)
             text = egs["text"]
-            
+
             loss, _, _ = nnet.module.forward(inp=noisy, text=text, clean=label)
-          
+
             torch.distributed.barrier()
 
             reduced_loss = reduce_mean(loss, world_size)
@@ -324,16 +311,13 @@ def main_worker(local_rank, args):
     device = torch.device("cuda", local_rank)
     cudnn.benchmark = True
     world_size = dist.get_world_size()
-    
-
-
 
     with open(args.conf, "r") as f:
         conf = yaml.load(f, Loader=yaml.FullLoader)
 
-    random.seed(conf['train']['seed'])
-    np.random.seed(conf['train']['seed'])
-    torch.cuda.manual_seed_all(conf['train']['seed'])
+    random.seed(conf["train"]["seed"])
+    np.random.seed(conf["train"]["seed"])
+    torch.cuda.manual_seed_all(conf["train"]["seed"])
     checkpoint_dir = Path(conf["train"]["checkpoint"])
     checkpoint_dir.mkdir(exist_ok=True, parents=True)
 
@@ -352,35 +336,39 @@ def main_worker(local_rank, args):
             yaml.dump(conf, f)
 
     model_cls = DiT
-    
-    ## 
-    tokenizer = conf['model']['tokenizer']
 
     ##
-    tokenizer_path = conf['model']['tokenizer_path']
+    tokenizer = conf["model"]["tokenizer"]
+
+    ##
+    tokenizer_path = conf["model"]["tokenizer_path"]
     vocab_char_map, vocab_size = get_tokenizer(tokenizer_path, tokenizer)
-    
-    
+
     nnet = CFM(
-        transformer=model_cls(**conf['model']['arch'], text_num_embeds=vocab_size,mel_dim=conf['model']['mel_spec']['n_mel_channels']),
-        audio_drop_prob=conf['model']['audio_drop_prob'],cond_drop_prob=conf['model']['cond_drop_prob'],
-        mel_spec_kwargs=conf['model']['mel_spec'],vocab_char_map=vocab_char_map
+        transformer=model_cls(
+            **conf["model"]["arch"],
+            text_num_embeds=vocab_size,
+            mel_dim=conf["model"]["mel_spec"]["n_mel_channels"],
+        ),
+        audio_drop_prob=conf["model"]["audio_drop_prob"],
+        cond_drop_prob=conf["model"]["cond_drop_prob"],
+        mel_spec_kwargs=conf["model"]["mel_spec"],
+        vocab_char_map=vocab_char_map,
     )
 
-    
     if local_rank == 0:
         num_params = sum([param.nelement() for param in nnet.parameters()]) / 10.0**6
         logger.info("model summary:\n{}".format(nnet))
         logger.info(f"#param: {num_params:.2f}M")
-  
+
     start_epoch = 0
     end_epoch = conf["train"]["epoch"]
 
     if conf["train"]["resume"]:
         if not Path(conf["train"]["resume"]).exists():
             raise FileNotFoundError(
-                f"Could not find resume checkpoint: {conf['train']['resume']}")
-        
+                f"Could not find resume checkpoint: {conf['train']['resume']}"
+            )
 
         else:
             cpt = torch.load(conf["train"]["resume"], map_location="cpu")
@@ -388,9 +376,9 @@ def main_worker(local_rank, args):
                 for i in list(cpt["model_state_dict"]):
                     if i[: len("stft")] == "stft" or i[: len("istft")] == "istft":
                         del cpt["model_state_dict"][i]
-            
+
             start_epoch = cpt["epoch"] + 1
-            
+
             if local_rank == 0:
                 logger.info(
                     f"resume from checkpoint {conf['train']['resume']}: epoch {start_epoch:d}"
@@ -398,7 +386,7 @@ def main_worker(local_rank, args):
             nnet.load_state_dict(
                 cpt["model_state_dict"], strict=conf["train"]["strict"]
             )
-           
+
             nnet = nnet.cpu() if device == torch.device("cpu") else nnet.cuda()
     else:
         nnet = nnet.cpu() if device == torch.device("cpu") else nnet.cuda()
@@ -409,57 +397,65 @@ def main_worker(local_rank, args):
         output_device=local_rank,
         find_unused_parameters=True,
     )
-   
-    '''
+
+    """
     accelerator = Accelerator(
             log_with=logger if logger == "wandb" else None,
             gradient_accumulation_steps=conf['optim']['grad_accumulation_steps'],
     )
-    '''
-    
-    optimizer = AdamW(nnet.parameters(), lr=conf['optim']['lr'])
-    
-    '''
+    """
+
+    optimizer = AdamW(nnet.parameters(), lr=conf["optim"]["lr"])
+
+    """
     nnet, optimizer = accelerator.prepare(nnet, optimizer)
     accelerator.even_batches = False
-    '''
-    
-    
+    """
+
     train_sampler, train_loader, val_sampler, val_loader = make_dataloader(conf)
- 
+
     warmup_steps = (
         # conf['optim']['warm_up_step'] * accelerator.num_processes
-        conf['optim']['warm_up_step'] * world_size
-    )  
+        conf["optim"]["warm_up_step"] * world_size
+    )
 
-    total_steps = len(train_loader) * conf['optim']['max_epoch'] / conf['optim']['grad_accumulation_steps']
+    total_steps = (
+        len(train_loader)
+        * conf["optim"]["max_epoch"]
+        / conf["optim"]["grad_accumulation_steps"]
+    )
     decay_steps = total_steps - warmup_steps
     logger.info(f"warmup_steps:{warmup_steps}")
     logger.info(f"decay_steps:{decay_steps}")
-    
-    warmup_scheduler = LinearLR(optimizer, start_factor=1e-8, end_factor=1.0, total_iters=warmup_steps)
-    decay_scheduler = LinearLR(optimizer, start_factor=1.0, end_factor=1e-8, total_iters=decay_steps)
-    scheduler = SequentialLR(
-        optimizer,schedulers=[warmup_scheduler, decay_scheduler], milestones=[warmup_steps]
+
+    warmup_scheduler = LinearLR(
+        optimizer, start_factor=1e-8, end_factor=1.0, total_iters=warmup_steps
     )
-    
+    decay_scheduler = LinearLR(
+        optimizer, start_factor=1.0, end_factor=1e-8, total_iters=decay_steps
+    )
+    scheduler = SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, decay_scheduler],
+        milestones=[warmup_steps],
+    )
+
     if conf["train"]["resume"] and not conf["train"]["reset_lr"]:
         if not Path(conf["train"]["resume"]).exists():
             raise FileNotFoundError(
                 f"Could not find resume checkpoint: {conf['train']['resume']}"
             )
         cpt = torch.load(conf["train"]["resume"], map_location=device)
-        
+
         optimizer.load_state_dict(cpt["optim_state_dict"])
-        scheduler.load_state_dict(cpt["scheduler_state_dict"])  
-        
-    
-    '''
+        scheduler.load_state_dict(cpt["scheduler_state_dict"])
+
+    """
     train_loader, scheduler = accelerator.prepare(
         train_loader, scheduler
-    ) 
-    '''
-    
+    )
+    """
+
     best_loss = 10000
     no_impr = 0
 
@@ -491,7 +487,7 @@ def main_worker(local_rank, args):
         if cv_loss < best_loss:
             best_loss = cv_loss
             no_impr = 0
-            
+
             if local_rank == 0:
                 save_checkpoint(
                     checkpoint_dir,
@@ -509,7 +505,6 @@ def main_worker(local_rank, args):
             no_impr += 1
             if local_rank == 0:
                 logger.info(f"| no impr, best = {best_loss:.4f}")
-                
 
         logger.info(f"epoch:{epoch} save")
         if local_rank == 0:

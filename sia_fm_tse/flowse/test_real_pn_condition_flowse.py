@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torchaudio
 
-from model.cfm import CFM
-from model.backbones.dit import DiT
+from sia_fm_tse.flowse.model.backbones.dit import DiT
+from sia_fm_tse.flowse.model.cfm import CFM
 
 
 class SpeakerConditionedCFM(nn.Module):
@@ -14,15 +14,15 @@ class SpeakerConditionedCFM(nn.Module):
 
     def wav_to_mel(self, wav):
         # wav: [B, samples]
-        mel = self.cfm.mel_spec(wav)      # [B, mel, T]
-        mel = mel.permute(0, 2, 1)        # [B, T, mel]
+        mel = self.cfm.mel_spec(wav)  # [B, mel, T]
+        mel = mel.permute(0, 2, 1)  # [B, T, mel]
         return mel
 
     def forward(self, mix_wave, target_wave, text, cond_emb):
         # cond_emb: [B, 64, T, F]
-        c_spk = cond_emb.mean(dim=(2, 3))     # [B, 64]
-        spk = self.spk_proj(c_spk)            # [B, 100]
-        spk = spk[:, None, :]                 # [B, 1, 100]
+        c_spk = cond_emb.mean(dim=(2, 3))  # [B, 64]
+        spk = self.spk_proj(c_spk)  # [B, 100]
+        spk = spk[:, None, :]  # [B, 1, 100]
 
         noisy_mel = self.wav_to_mel(mix_wave)
         clean_mel = self.wav_to_mel(target_wave)
@@ -42,9 +42,9 @@ print("device:", device)
 
 data = torch.load("../bridge_outputs/pn_condition_sample.pt", map_location="cpu")
 
-mix_wave = data["mix_wave"].squeeze(1).to(device)       # [B, wav]
-target_wave = data["target_wave"].squeeze(1).to(device) # [B, wav]
-cond_emb = data["cond_emb"].to(device)                  # [B, 64, 751, 65]
+mix_wave = data["mix_wave"].squeeze(1).to(device)  # [B, wav]
+target_wave = data["target_wave"].squeeze(1).to(device)  # [B, wav]
+cond_emb = data["cond_emb"].to(device)  # [B, 64, 751, 65]
 sr = data["sample_rate"]
 
 # FlowSE train config uses 24 kHz mel. Resample 16k -> 24k for this bridge test.

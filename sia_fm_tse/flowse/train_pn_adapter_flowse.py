@@ -3,7 +3,7 @@ import torch.nn as nn
 import torchaudio
 import yaml
 
-from model import DiT, CFM
+from sia_fm_tse.flowse.model import CFM, DiT
 
 
 class PNAdapterFlowSE(nn.Module):
@@ -18,11 +18,11 @@ class PNAdapterFlowSE(nn.Module):
 
     def forward(self, noisy_mel, clean_mel, text, cond_emb):
         # cond_emb: [B, 64, T, F]
-        c_spk = cond_emb.mean(dim=(2, 3))     # [B, 64]
-        spk = self.spk_proj(c_spk)            # [B, 100]
-        spk = spk[:, None, :]                 # [B, 1, 100]
+        c_spk = cond_emb.mean(dim=(2, 3))  # [B, 64]
+        spk = self.spk_proj(c_spk)  # [B, 100]
+        spk = spk[:, None, :]  # [B, 1, 100]
 
-        speaker_cond_mel = noisy_mel + spk    # [B, N, 100]
+        speaker_cond_mel = noisy_mel + spk  # [B, N, 100]
 
         return self.cfm(
             inp=speaker_cond_mel,
@@ -87,21 +87,23 @@ print("checkpoint best_loss:", ckpt.get("best_loss"))
 # ===== load bridge sample =====
 data = torch.load("../bridge_outputs/pn_condition_sample.pt", map_location="cpu")
 
-mix_wave = data["mix_wave"].squeeze(1).to(device)       # [B, wav]
-target_wave = data["target_wave"].squeeze(1).to(device) # [B, wav]
-cond_emb = data["cond_emb"].to(device)                  # [B, 64, 751, 65]
+mix_wave = data["mix_wave"].squeeze(1).to(device)  # [B, wav]
+target_wave = data["target_wave"].squeeze(1).to(device)  # [B, wav]
+cond_emb = data["cond_emb"].to(device)  # [B, 64, 751, 65]
 sr = data["sample_rate"]
 
 target_sr = mel_conf["target_sample_rate"]
 if sr != target_sr:
-    resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=target_sr).to(device)
+    resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=target_sr).to(
+        device
+    )
     mix_wave = resampler(mix_wave)
     target_wave = resampler(target_wave)
 
 # mel은 미리 계산
 with torch.no_grad():
-    noisy_mel = cfm.mel_spec(mix_wave).permute(0, 2, 1)    # [B, N, 100]
-    clean_mel = cfm.mel_spec(target_wave).permute(0, 2, 1) # [B, N, 100]
+    noisy_mel = cfm.mel_spec(mix_wave).permute(0, 2, 1)  # [B, N, 100]
+    clean_mel = cfm.mel_spec(target_wave).permute(0, 2, 1)  # [B, N, 100]
 
 text = [" "] * noisy_mel.shape[0]
 
@@ -137,6 +139,6 @@ for step in range(num_steps):
     if step == 0 or (step + 1) % 5 == 0:
         with torch.no_grad():
             spk_norm = model.spk_proj(cond_emb.mean(dim=(2, 3))).norm().item()
-        print(f"step {step+1:03d} | loss {loss.item():.6f} | spk_norm {spk_norm:.6f}")
+        print(f"step {step + 1:03d} | loss {loss.item():.6f} | spk_norm {spk_norm:.6f}")
 
 print("adapter training sanity check done")

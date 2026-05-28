@@ -11,18 +11,16 @@ from __future__ import annotations
 
 import torch
 from torch import nn
-
 from x_transformers.x_transformers import RotaryEmbedding
 
 from ..modules import (
-    TimestepEmbedding,
+    AdaLayerNormZero_Final,
     ConvPositionEmbedding,
     MMDiTBlock,
-    AdaLayerNormZero_Final,
-    precompute_freqs_cis,
+    TimestepEmbedding,
     get_pos_embed_indices,
+    precompute_freqs_cis,
 )
-
 
 # text embedding
 
@@ -30,10 +28,16 @@ from ..modules import (
 class TextEmbedding(nn.Module):
     def __init__(self, out_dim, text_num_embeds):
         super().__init__()
-        self.text_embed = nn.Embedding(text_num_embeds + 1, out_dim)  # will use 0 as filler token
+        self.text_embed = nn.Embedding(
+            text_num_embeds + 1, out_dim
+        )  # will use 0 as filler token
 
         self.precompute_max_pos = 1024
-        self.register_buffer("freqs_cis", precompute_freqs_cis(out_dim, self.precompute_max_pos), persistent=False)
+        self.register_buffer(
+            "freqs_cis",
+            precompute_freqs_cis(out_dim, self.precompute_max_pos),
+            persistent=False,
+        )
 
     def forward(self, text: int["b nt"], drop_text=False) -> int["b nt d"]:  # noqa: F722
         text = text + 1
@@ -44,7 +48,9 @@ class TextEmbedding(nn.Module):
         # sinus pos emb
         batch_start = torch.zeros((text.shape[0],), dtype=torch.long)
         batch_text_len = text.shape[1]
-        pos_idx = get_pos_embed_indices(batch_start, batch_text_len, max_pos=self.precompute_max_pos)
+        pos_idx = get_pos_embed_indices(
+            batch_start, batch_text_len, max_pos=self.precompute_max_pos
+        )
         text_pos_embed = self.freqs_cis[pos_idx]
 
         text = text + text_pos_embed
