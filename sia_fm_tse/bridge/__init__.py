@@ -1,3 +1,3 @@
-from sia_fm_tse.models.PNAttentionFlow import PNAttentionFlow
+from sia_fm_tse.bridge.PNAttentionFlow import PNAttentionFlow
 
 __all__ = ("PNAttentionFlow",)

@@ -3,79 +3,74 @@ import random
 
 import librosa
 import numpy as np
-import sofa
+import sofar
 import torch
 import torchaudio
 from resemblyzer import VoiceEncoder, preprocess_wav, trim_long_silences
 from torch.utils.data import Dataset
 
 
+def _load_rir_sofar(hrtf: sofar.Sofa, m_idx: int, sample_rate: int) -> torch.Tensor:
+    """
+    Extract a single impulse response from a sofar Sofa object and resample it.
+
+    Args:
+        hrtf:        sofar.Sofa object loaded via sofar.read_sofa().
+        m_idx:       Measurement index M to extract.
+        sample_rate: Target sample rate.
+
+    Returns:
+        rir: [R, sample_rate] float32 tensor (R = number of receivers, typically 2 for binaural).
+    """
+    _sr = int(getattr(hrtf, "Data_SamplingRate"))  # scalar after sofar loading
+    data_ir: np.ndarray = getattr(hrtf, "Data_IR")
+    rir = data_irR[m_idx].astype(np.float32)  # [R, N]
+    rir = torchaudio.functional.resample(torch.from_numpy(rir), _sr, sample_rate)[
+        ..., :sample_rate
+    ]  # [R, sample_rate]
+    return rir
+
+
 class CIPIC_simulator:
     def __init__(self, brir_dir, sample_rate):
         self.sample_rate = sample_rate
 
-        CIPIC_dir = brir_dir
         CIPIC_rir_scenes = [
-            f"{CIPIC_dir}/{f}" for f in os.listdir(CIPIC_dir) if f.endswith(".sofa")
+            f"{brir_dir}/{f}" for f in os.listdir(brir_dir) if f.endswith(".sofa")
         ]
-        self.CIPIC_rir_scenes = [sofa.Database.open(sid) for sid in CIPIC_rir_scenes]
+        self.CIPIC_rir_scenes = [sofar.read_sofa(sid) for sid in CIPIC_rir_scenes]
         self.face_to_face_idx = 608
 
-    def sample_one_scene(self):
-        hrtf = random.sample(self.CIPIC_rir_scenes, 1)[0]
-        return hrtf
+    def sample_one_scene(self) -> sofar.Sofa:
+        return random.sample(self.CIPIC_rir_scenes, 1)[0]
 
-    def sample_one_rir(self, hrtf):
-        ir_idx = {"M": random.sample(range(hrtf.Dimensions.M), 1)[0]}
-        _sr = hrtf.Data.SamplingRate.get_values(indices=ir_idx).item()
-        rir = hrtf.Data.IR.get_values(indices=ir_idx).astype(np.float32)
-        rir = torchaudio.functional.resample(
-            torch.from_numpy(rir), _sr, self.sample_rate
-        )[..., : self.sample_rate]
-        return rir
+    def sample_one_rir(self, hrtf: sofar.Sofa) -> torch.Tensor:
+        m_idx = random.randrange(hrtf.Data_IR.shape[0])
+        return _load_rir_sofar(hrtf, m_idx, self.sample_rate)
 
-    def zero_angle_rir(self, hrtf):
-        ir_idx = {"M": self.face_to_face_idx}
-        _sr = hrtf.Data.SamplingRate.get_values(indices=ir_idx).item()
-        rir = hrtf.Data.IR.get_values(indices=ir_idx).astype(np.float32)
-        rir = torchaudio.functional.resample(
-            torch.from_numpy(rir), _sr, self.sample_rate
-        )[..., : self.sample_rate]
-        return rir
+    def zero_angle_rir(self, hrtf: sofar.Sofa) -> torch.Tensor:
+        return _load_rir_sofar(hrtf, self.face_to_face_idx, self.sample_rate)
 
 
 class RRBRIR_simulator:
     def __init__(self, brir_dir, sample_rate):
         self.sample_rate = sample_rate
 
-        RRBRIR_dir = brir_dir
         RRBRIR_rir_scenes = [
-            f"{RRBRIR_dir}/{f}" for f in os.listdir(RRBRIR_dir) if f.endswith(".sofa")
+            f"{brir_dir}/{f}" for f in os.listdir(brir_dir) if f.endswith(".sofa")
         ]
-        self.RRBRIR_rir_scenes = [sofa.Database.open(sid) for sid in RRBRIR_rir_scenes]
+        self.RRBRIR_rir_scenes = [sofar.read_sofa(sid) for sid in RRBRIR_rir_scenes]
         self.face_to_face_idx = 18
 
-    def sample_one_scene(self):
-        hrtf = random.sample(self.RRBRIR_rir_scenes, 1)[0]
-        return hrtf
+    def sample_one_scene(self) -> sofar.Sofa:
+        return random.sample(self.RRBRIR_rir_scenes, 1)[0]
 
-    def sample_one_rir(self, hrtf):
-        ir_idx = {"M": random.sample(range(hrtf.Dimensions.M), 1)[0]}
-        _sr = hrtf.Data.SamplingRate.get_values(indices=ir_idx).item()
-        rir = hrtf.Data.IR.get_values(indices=ir_idx).astype(np.float32)
-        rir = torchaudio.functional.resample(
-            torch.from_numpy(rir), _sr, self.sample_rate
-        )[..., : self.sample_rate]
-        return rir
+    def sample_one_rir(self, hrtf: sofar.Sofa) -> torch.Tensor:
+        m_idx = random.randrange(hrtf.Data_IR.shape[0])
+        return _load_rir_sofar(hrtf, m_idx, self.sample_rate)
 
-    def zero_angle_rir(self, hrtf):
-        ir_idx = {"M": self.face_to_face_idx}
-        _sr = hrtf.Data.SamplingRate.get_values(indices=ir_idx).item()
-        rir = hrtf.Data.IR.get_values(indices=ir_idx).astype(np.float32)
-        rir = torchaudio.functional.resample(
-            torch.from_numpy(rir), _sr, self.sample_rate
-        )[..., : self.sample_rate]
-        return rir
+    def zero_angle_rir(self, hrtf: sofar.Sofa) -> torch.Tensor:
+        return _load_rir_sofar(hrtf, self.face_to_face_idx, self.sample_rate)
 
 
 class ASH_simulator:
@@ -123,20 +118,19 @@ class ASH_simulator:
                 files.extend([f"{ASH_dir}/{sid}/{rir_name}"])
             self.ASH_rir_scene_rir_map[sid] = files
 
-    def sample_one_scene(self):
-        sid = random.sample(self.ASH_rir_scenes, 1)[0]
-        return sid
+    def sample_one_scene(self) -> str:
+        return random.sample(self.ASH_rir_scenes, 1)[0]
 
-    def sample_one_rir(self, sid):
+    def sample_one_rir(self, sid: str) -> torch.Tensor:
         rir_id = random.sample(self.ASH_rir_scene_rir_map[sid], 1)[0]
         return self._get_one_rir(rir_id)
 
-    def zero_angle_rir(self, sid):
+    def zero_angle_rir(self, sid: str) -> torch.Tensor:
         rirs = self.ASH_rir_scene_rir_map[sid]
         a0_file = [file for file in rirs if file.endswith("A0.wav")][0]
         return self._get_one_rir(a0_file)
 
-    def _get_one_rir(self, name):
+    def _get_one_rir(self, name: str) -> torch.Tensor:
         brir, sr = torchaudio.load(name)
         brir = torchaudio.functional.resample(brir, sr, self.sample_rate)
         if brir.shape[-1] < self.sample_rate:
@@ -177,20 +171,19 @@ class CATT_simulator:
                 files.extend([f"{CATTRIR_dir}/{sid}/{rir_name}"])
             self.CATTRIR_rir_scene_rir_map[sid] = files
 
-    def sample_one_scene(self):
-        sid = random.sample(self.CATTRIR_rir_scenes, 1)[0]
-        return sid
+    def sample_one_scene(self) -> str:
+        return random.sample(self.CATTRIR_rir_scenes, 1)[0]
 
-    def sample_one_rir(self, sid):
+    def sample_one_rir(self, sid: str) -> torch.Tensor:
         rir_id = random.sample(self.CATTRIR_rir_scene_rir_map[sid], 1)[0]
         return self._get_one_rir(rir_id)
 
-    def zero_angle_rir(self, sid):
+    def zero_angle_rir(self, sid: str) -> torch.Tensor:
         rirs = self.CATTRIR_rir_scene_rir_map[sid]
         a0_file = [file for file in rirs if file.endswith("_0.wav")][0]
         return self._get_one_rir(a0_file)
 
-    def _get_one_rir(self, name):
+    def _get_one_rir(self, name: str) -> torch.Tensor:
         brir, sr = torchaudio.load(name)
         brir = torchaudio.functional.resample(brir, sr, self.sample_rate)
         if brir.shape[-1] < self.sample_rate:
@@ -244,7 +237,7 @@ class LibriDataset_single_emb(Dataset):
         self.wave_length = wave_length
         self.pos_example_length = pos_example_length
         self.neg_example_length = neg_example_length
-        self.source_num = source_num  # number of people in the scene, not all speakers are necessary active
+        self.source_num = source_num
         self.min_source_num = min_source_num
         if enroll_num < 0:
             self.enroll_num = source_num
@@ -255,7 +248,7 @@ class LibriDataset_single_emb(Dataset):
         else:
             self.min_enroll_num = min_enroll_num
 
-        self.active_num = active_num  # number of maximum active speaker in the scene in sample/pos/neg audio
+        self.active_num = active_num
         self.verbose = verbose
         self.return_dvec = return_dvec
         self.reproducable = reproducable
@@ -291,7 +284,6 @@ class LibriDataset_single_emb(Dataset):
         if return_dvec or return_clean_dvec:
             self.encoder = VoiceEncoder(device="cpu", verbose=False)
 
-        # get sound source dict, key is source id, val is source file list
         self.person_ids = [f for f in os.listdir(root_dir)]
         self.person_ids.sort()
         self.person_sound_map = {}
@@ -313,7 +305,6 @@ class LibriDataset_single_emb(Dataset):
             files.sort()
             self.person_sound_map[pid] = files
 
-        # get brir dir
         self.zero_degree_pos = zero_degree_pos
         if reverb == "none":
             self.reverb_sims = []
@@ -327,7 +318,6 @@ class LibriDataset_single_emb(Dataset):
         else:
             raise NotImplementedError(reverb)
 
-        # get noise dir
         self.noise_names = []
         if self.noise_dir != "":
             self.noise_names = os.listdir(self.noise_dir)
@@ -336,28 +326,23 @@ class LibriDataset_single_emb(Dataset):
         return len(self.person_ids)
 
     def rms(self, audio):
-        """Compute the Root Mean Square of the audio tensor."""
         return torch.sqrt(torch.mean(audio**2))
 
     def normalize_audio(self, target_audio, reference_rms):
-        """Normalize the target audio tensor to have the same RMS as the reference audio tensor."""
         target_rms = self.rms(target_audio)
         normalization_factor = reference_rms / target_rms
         normalized_audio = target_audio * normalization_factor
         return normalized_audio
 
     def repeat_or_cut_wavefrom(self, wavefrom, desired_length):
-        # make sure all wavefroms are 1 seconds, i.e. length of sampling rate
         current_length = wavefrom.shape[-1]
         if current_length < desired_length:
             repeat_count = (desired_length + current_length - 1) // current_length
-            # Duplicate the trimmed tensor to approximate the original length
             wavefrom = wavefrom.repeat((1, repeat_count))
         cut_tensor = wavefrom[..., :desired_length]
         return cut_tensor
 
     def pad_or_cut_waveform(self, wavefrom, desired_length):
-        # make sure all wavefroms are 1 seconds, i.e. length of sampling rate
         current_length = wavefrom.shape[-1]
         if current_length < desired_length:
             wavefrom = torch.nn.functional.pad(
@@ -369,10 +354,7 @@ class LibriDataset_single_emb(Dataset):
     def load_and_repeat(
         self, sound_name, length, remove_zero=True, filling_pattern="repeat"
     ):
-        # load an audio, resample to given sample rate
-        audio, _ = librosa.load(
-            sound_name, sr=self.sample_rate
-        )  # [length] or [2, length]
+        audio, _ = librosa.load(sound_name, sr=self.sample_rate)
         if remove_zero:
             audio = trim_long_silences(audio)
         audio = torch.from_numpy(audio)
@@ -382,7 +364,6 @@ class LibriDataset_single_emb(Dataset):
         if len(audio.shape) == 1:
             audio = audio.unsqueeze(0)
 
-        # fill the audio to given length
         if filling_pattern == "repeat":
             audio = self.repeat_or_cut_wavefrom(audio, length)
             l = length
@@ -400,9 +381,7 @@ class LibriDataset_single_emb(Dataset):
         embed = self.encoder.embed_utterance(
             audio, return_partials=True, rate=self.dvec_rate
         )[1]
-
         embed = torch.from_numpy(embed)
-
         if embed.shape[0] < emb_length:
             embed = torch.nn.functional.pad(
                 embed, (0, 0, 0, emb_length - embed.shape[0]), mode="constant", value=0
@@ -429,17 +408,13 @@ class LibriDataset_single_emb(Dataset):
     def scale_intensity(self, sample, pos, neg):
         if self.tgt_intensity < -100:
             return sample, pos, neg
-
         pos_tgt_gain = self.get_noise_ratio_given_snr(
             pos[:1], pos[1:].sum(dim=0), self.tgt_intensity
         )
-
         pos[:1] = pos[:1] * pos_tgt_gain
-
         return sample, pos, neg
 
     def __getitem__(self, idx):
-        # idx represent id of file, get gt file
         if self.reproducable:
             random.seed(idx)
             tgt_pid = random.sample(self.person_ids, 1)[0]
@@ -455,9 +430,7 @@ class LibriDataset_single_emb(Dataset):
         enroll_num = random.randint(self.min_enroll_num, self.enroll_num)
         other_person_ids = list(self.person_sound_map.keys())
         other_person_ids.remove(tgt_pid)
-        enroll_noise_pids = random.sample(
-            other_person_ids, enroll_num - 1
-        )  # ["p222", "p333", ...]
+        enroll_noise_pids = random.sample(other_person_ids, enroll_num - 1)
         enroll_noise_pids.sort()
         if self.same_disturb:
             sample_noise_pids = enroll_noise_pids[: source_num - 1]
@@ -533,7 +506,6 @@ class LibriDataset_single_emb(Dataset):
                 acc_l += l
                 audios.append(sound)
             sound = torch.concat(audios, dim=-1)[..., : self.pos_example_length]
-            # sound = self.add_silent(sound)
             pos_cond_separated.append(sound)
             if self.verbose:
                 print("pos noise", sound_name_)
@@ -568,10 +540,10 @@ class LibriDataset_single_emb(Dataset):
                 rir_simulator = rng.sample(self.reverb_sims, 1, counts=[35, 5, 45, 15])[
                     0
                 ]
-            if self.binaural:  # binaural reverberant audio
+            if self.binaural:
                 rir_scene = rir_simulator.sample_one_scene()
 
-                sample = sample.repeat((1, 2, 1))  # [source_num, 2, length]
+                sample = sample.repeat((1, 2, 1))
                 pos_cond_separated = pos_cond_separated.repeat((1, 2, 1))
                 neg_cond = neg_cond.repeat((1, 2, 1))
 
@@ -593,13 +565,13 @@ class LibriDataset_single_emb(Dataset):
                     for _ in range(enroll_num - self.active_num[1])
                 ]
 
-                mix_rirs = torch.stack(mix_rirs)  # [source_num, 2, length]
+                mix_rirs = torch.stack(mix_rirs)
                 pos_rirs = torch.stack(pos_rirs)
                 neg_rirs = torch.stack(neg_rirs)
 
                 sample = torchaudio.functional.fftconvolve(sample, mix_rirs)[
                     ..., : self.wave_length
-                ]  # [source_num, 2, length]
+                ]
                 if self.reverb_cond:
                     pos_cond_separated = torchaudio.functional.fftconvolve(
                         pos_cond_separated, pos_rirs
@@ -607,7 +579,7 @@ class LibriDataset_single_emb(Dataset):
                     neg_cond = torchaudio.functional.fftconvolve(neg_cond, neg_rirs)[
                         ..., : self.neg_example_length
                     ]
-            else:  # monaural reverberant audio
+            else:
                 rir_scene = rir_simulator.sample_one_scene()
 
                 mix_rirs = [
@@ -628,13 +600,13 @@ class LibriDataset_single_emb(Dataset):
                     for _ in range(enroll_num - self.active_num[1])
                 ]
 
-                mix_rirs = torch.stack(mix_rirs)  # [source_num, 1, length]
+                mix_rirs = torch.stack(mix_rirs)
                 pos_rirs = torch.stack(pos_rirs)
                 neg_rirs = torch.stack(neg_rirs)
 
                 sample = torchaudio.functional.fftconvolve(sample, mix_rirs)[
                     ..., : self.wave_length
-                ]  # [source_num, 1, length]
+                ]
                 if self.reverb_cond:
                     pos_cond_separated = torchaudio.functional.fftconvolve(
                         pos_cond_separated, pos_rirs
@@ -657,7 +629,6 @@ class LibriDataset_single_emb(Dataset):
                     )
                     start = random.randint(0, self.pos_example_length - active_len)
                     end = start + active_len
-
                     pos_cond_separated[self.active_num[1] + i, :, :start] = 0
                     pos_cond_separated[self.active_num[1] + i, :, end:] = 0
                     neg_cond[i] = 0
@@ -676,7 +647,6 @@ class LibriDataset_single_emb(Dataset):
                     active_len = int(max(active_len, self.sample_rate // 2))
                     start = random.randint(0, self.neg_example_length - active_len)
                     end = start + active_len
-
                     neg_cond[partial_pos_num + i, :, :start] = 0
                     neg_cond[partial_pos_num + i, :, end:] = 0
 
@@ -735,15 +705,5 @@ class LibriDataset_single_emb(Dataset):
         sample, pos_cond_separated, neg_cond = self.scale_intensity(
             sample, pos_cond_separated, neg_cond
         )
-
-        # if self.return_dvec:
-        #     neg0_dvec = torch.from_numpy(self.encoder.embed_utterance(preprocess_wav(neg_cond[0].squeeze().numpy())))
-        # else:
-        #     neg0_dvec = torch.zeros((1,))
-
-        # if self.return_clean_dvec:
-        #     pos0_dvec = torch.from_numpy(self.encoder.embed_utterance(preprocess_wav(clean_pos.sum(dim=0).squeeze().numpy())))
-        # else:
-        #     pos0_dvec = torch.zeros((1,))
 
         return sample, pos_cond_separated, neg_cond

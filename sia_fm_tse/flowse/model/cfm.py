@@ -9,6 +9,7 @@ from random import random
 
 import torch
 import torch.nn.functional as F
+from frozendict import frozendict
 from torch import nn
 from torchdiffeq import odeint
 

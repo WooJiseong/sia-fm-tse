@@ -8,6 +8,7 @@ bridge_outputs/
 *.tar
 *.tar.gz
 *.zip
+*.sbatch
 
 bridge_outputs/
 flowse/output/
