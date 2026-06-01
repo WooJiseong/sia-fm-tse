@@ -9,6 +9,9 @@ bridge_outputs/
 *.tar.gz
 *.zip
 *.sbatch
+data/
+output/
+*.log
 
 bridge_outputs/
 flowse/output/

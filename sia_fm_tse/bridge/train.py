@@ -56,8 +56,8 @@ def parse_args() -> argparse.Namespace:
     # ── Dataset ────────────────────────────────────────────────────────────────
     parser.add_argument("--train-dataset-dir", required=True)
     parser.add_argument("--val-dataset-dir", required=True)
-    parser.add_argument("--noise-dir", required=True)
-    parser.add_argument("--brir-dir", required=True)
+    parser.add_argument("--noise-dir", type=str, default=None)
+    parser.add_argument("--brir-dir", type=str, default=None)
     parser.add_argument("--wave-length", type=int, default=48000)
     parser.add_argument("--source-num", type=int, default=2)
     parser.add_argument("--min-source-num", type=int, default=1)
