@@ -1,9 +1,11 @@
+"""Diffusion Transformer Implementation"""
+
 # Refer to https://arxiv.org/pdf/2212.09748
 import torch
 import torch.nn as nn
 from x_transformers.x_transformers import RotaryEmbedding
 
-from ..modules import FeedForward, InputEmbedding, MHAttention, TimestepEmbedding
+from .modules import FeedForward, InputEmbedding, MHAttention, TimestepEmbedding
 
 
 class AdaLNZero(nn.Module):
@@ -201,7 +203,7 @@ class DiT(nn.Module):
     def __init__(
         self,
         *,
-        dim,
+        dim: int,
         depth: int = 8,
         n_head: int = 8,
         dim_head: int = 64,
@@ -221,8 +223,8 @@ class DiT(nn.Module):
         Timestep t is embedded via sinusoidal encoding + MLP,
         and injected into each DiTBlock via adaLN-Zero conditioning.
 
-        x: [B, T, D]
-        c: [B, T, D]
+        x: [B, T, D_x]
+        c: [B, T, D_c]   <- in our case, uses encoder condition *c* and audio mixture *m* as condition
         t: [B]
 
          x, c ─────────────────────────────┐    ╭────────╮
@@ -237,7 +239,7 @@ class DiT(nn.Module):
         """
         super().__init__()
         self.time_emb = TimestepEmbedding(dim)
-        self.input_emb = InputEmbedding(mel_dim * 2, out_dim=dim)
+        self.input_emb = InputEmbedding(mel_dim * 3, out_dim=dim)
         self.rotary_emb = RotaryEmbedding(dim_head)
         self.dim = dim
         self.depth = depth
@@ -266,15 +268,17 @@ class DiT(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
+        m: torch.Tensor,
         c: torch.Tensor,
         t: torch.Tensor,
         mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Args:
-            x:    [B, T, mel_dim] noisy mel-spectrogram
-            c:    [B, T, mel_dim] condition mel-spectrogram
-            t:    [B] diffusion timestep
+            x: [B, T, mel_dim] noisy mel-spectrogram
+            m: [B, T, mel_dim] mixture mel-spectrogram
+            c: [B, T, mel_dim] `cond_emb` from encoder
+            t: [B] diffusion timestep
             mask: Optional [B, T] boolean Tensor (True = valid)
 
         Returns:
@@ -282,7 +286,7 @@ class DiT(nn.Module):
         """
         seq_len = x.shape[1]
         t = self.time_emb(t)
-        x = self.input_emb(x, c)
+        x = self.input_emb(x, m, c)
         rope = self.rotary_emb.forward_from_seq_len(seq_len)
 
         if self.long_skip_connection is not None:
