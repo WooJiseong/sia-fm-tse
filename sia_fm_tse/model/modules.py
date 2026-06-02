@@ -25,7 +25,7 @@ class FeedForward(nn.Module):
             out_dim:     output dimension (default: same as dim)
             mult:        hidden dim multiplier (hidden = dim × mult)
             dropout:     dropout rate
-            approximate: GELU approximation method ("none" | "tanh")
+            approximate: GELU approximation method
         """
         super().__init__()
         out_dim = out_dim if out_dim is not None else dim
