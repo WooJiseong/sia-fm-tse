@@ -1,12 +1,17 @@
+import itertools
 import os
 import sys
-import random
-import itertools
+
 import torch
 import torchaudio
 import yaml
-from torch.utils.data import DataLoader
 
+# ============================================================
+# Import FlowSE modules first
+# ============================================================
+from flowse.model import CFM, DiT
+from model.pn_conditioner import PNConditionedCFM, PNDiT
+from torch.utils.data import DataLoader
 
 # ============================================================
 # Paths
@@ -19,22 +24,16 @@ PN_REPO = os.environ.get(
 )
 
 FLOWSE_CKPT = os.environ.get("FLOWSE_CKPT", "wenetspeech4tts_Premium.pt.tar")
-PN_CKPT = os.environ.get("PN_CKPT", os.path.join(PN_REPO, "output/proposed-monaural.pt"))
+PN_CKPT = os.environ.get(
+    "PN_CKPT", os.path.join(PN_REPO, "output/proposed-monaural.pt")
+)
 
 SAVE_DIR = os.environ.get("SAVE_DIR", "output")
-
-
-# ============================================================
-# Import FlowSE modules first
-# ============================================================
-
-from model import DiT, CFM
-from model.pn_conditioner import PNConditionedCFM, PNDiT
-
 
 # ============================================================
 # Import PN-TSE modules despite same package name "model"
 # ============================================================
+
 
 def import_pn_modules(pn_repo: str):
     import importlib
@@ -43,21 +42,27 @@ def import_pn_modules(pn_repo: str):
     flowse_root = os.path.abspath(FLOWSE_ROOT)
 
     saved_modules = {
-        k: v for k, v in sys.modules.items()
-        if k == "model" or k.startswith("model.") or k == "dataset" or k.startswith("dataset.")
+        k: v
+        for k, v in sys.modules.items()
+        if k == "model"
+        or k.startswith("model.")
+        or k == "dataset"
+        or k.startswith("dataset.")
     }
 
     for k in list(sys.modules.keys()):
-        if k == "model" or k.startswith("model.") or k == "dataset" or k.startswith("dataset."):
+        if (
+            k == "model"
+            or k.startswith("model.")
+            or k == "dataset"
+            or k.startswith("dataset.")
+        ):
             del sys.modules[k]
 
     saved_path = list(sys.path)
 
     # flowse 경로와 현재 경로가 PN import를 가로채지 못하게 제거
-    sys.path = [
-        p for p in sys.path
-        if os.path.abspath(p or os.getcwd()) != flowse_root
-    ]
+    sys.path = [p for p in sys.path if os.path.abspath(p or os.getcwd()) != flowse_root]
 
     # PN repo를 최우선으로 둠
     sys.path.insert(0, pn_repo)
@@ -85,7 +90,12 @@ def import_pn_modules(pn_repo: str):
 
     finally:
         for k in list(sys.modules.keys()):
-            if k == "model" or k.startswith("model.") or k == "dataset" or k.startswith("dataset."):
+            if (
+                k == "model"
+                or k.startswith("model.")
+                or k == "dataset"
+                or k.startswith("dataset.")
+            ):
                 del sys.modules[k]
 
         sys.path = saved_path
@@ -98,7 +108,6 @@ def import_pn_modules(pn_repo: str):
         TFGridNet_KVfusion,
         TFGridNet_origcrossattn_causal_single_emb,
     )
-
 
 
 (
@@ -247,7 +256,7 @@ print("lr:", LR)
 flowse_ckpt = torch.load(FLOWSE_CKPT, map_location="cpu")
 flowse_state = flowse_ckpt["model_state_dict"]
 
-with open("config/train.yaml", "r") as f:
+with open("config/train.yaml") as f:
     conf = yaml.safe_load(f)
 
 model_conf = conf["model"]
@@ -342,7 +351,7 @@ for epoch in range(NUM_EPOCHS):
         neg = neg.to(device)
 
         mix_wave = audio.sum(dim=1).squeeze(1)  # [B, wav]
-        target_wave = audio[:, :active_num[1]].sum(dim=1).squeeze(1)  # [B, wav]
+        target_wave = audio[:, : active_num[1]].sum(dim=1).squeeze(1)  # [B, wav]
 
         with torch.no_grad():
             # Dataset already gives 3s pos/neg according to pos_example_length/neg_example_length.
@@ -375,7 +384,9 @@ for epoch in range(NUM_EPOCHS):
         )
 
         if not torch.isfinite(loss):
-            print(f"non-finite loss at epoch {epoch+1}, step {step+1}, global_step {global_step}: {loss.item()}")
+            print(
+                f"non-finite loss at epoch {epoch + 1}, step {step + 1}, global_step {global_step}: {loss.item()}"
+            )
             continue
 
         loss.backward()
@@ -392,18 +403,18 @@ for epoch in range(NUM_EPOCHS):
                 gate = model.cfm.transformer.speaker_attn_gate.item()
 
             print(
-                f"epoch {epoch+1:03d} | step {global_step:06d} | "
+                f"epoch {epoch + 1:03d} | step {global_step:06d} | "
                 f"loss {loss.item():.6f} | avg_loss {total_loss / max(count, 1):.6f} | "
                 f"pn_token_norm {pn_norm:.6f} | gate {gate:.6f}",
                 flush=True,
             )
 
     epoch_loss = total_loss / max(count, 1)
-    print(f"epoch {epoch+1:03d} done | epoch_loss {epoch_loss:.6f}", flush=True)
+    print(f"epoch {epoch + 1:03d} done | epoch_loss {epoch_loss:.6f}", flush=True)
 
     save_path = os.path.join(
         SAVE_DIR,
-        f"pn_online_adapter_bs{BATCH_SIZE}_epoch{epoch+1}.pt",
+        f"pn_online_adapter_bs{BATCH_SIZE}_epoch{epoch + 1}.pt",
     )
 
     torch.save(

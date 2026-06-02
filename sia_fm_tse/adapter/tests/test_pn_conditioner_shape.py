@@ -1,7 +1,6 @@
 import torch
-
-from model.backbones.dit import DiT
-from model.cfm import CFM
+from flowse.model.backbones.dit import DiT
+from flowse.model.cfm import CFM
 from model.pn_conditioner import PNConditionedCFM, PNDiT
 
 
