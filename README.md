@@ -1,21 +1,8 @@
 # Target Speech Enhancment through Positive Negative Enrollment with FlowSE
 
-> PLEASE USE `just`
+Process:
 
-to install just,
+1. Get `cond_emb` from pretrained model: `proposed-monaural.pt`, which acts as encoder.
+2. Pass `cond_emb` to [`PNViT`](./sia_fm_tse/adapter/model/pn_conditioner.py), and combines with FlowSE
 
-```sh
-conda install just -c conda-forge
-```
-
-with just, you can `uv` sync.
-
-```sh
-uv sync --frozen
-```
-
-If you don't have `uv` yet, you can install with:
-
-```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+But okay, I think we need to *reboot*.
