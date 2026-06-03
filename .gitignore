@@ -1,30 +1,38 @@
-*/__pycache__
-bridge_outputs/
-# Large checkpoints / generated artifacts
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+
+# ===== Ruff / Pyright =====
+.ruff_cache/
+.pyright/
+.pytest_cache/
+
+# ===== Model checkpoints & large artifacts =====
 *.pt
 *.pt.tar
 *.pth
 *.ckpt
+*.bin
 *.tar
 *.tar.gz
 *.zip
-*.sbatch
+
+# ===== Data =====
+data/
+
+# ===== Experiment outputs =====
+checkpoints/
+logs/
+runs/
+output/
+outputs/
+wandb/
+*.wav
 *.log
 
-bridge_outputs/
-flowse/output/
-flowse/wenetspeech4tts_Premium.pt.tar
-TSE-through-Positive-Negative-Enroll/output/
-TSE-through-Positive-Negative-Enroll/data/
-.venv/
-.python-version
-data/LibriSpeech/
-data/wham_noise/
-data/BRIR/
-
-output/
-*/__pycache__
-__pycache__/
-model/best.ckpt
-
+# ===== Secrets =====
+.env
 credentials.yaml

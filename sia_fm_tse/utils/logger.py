@@ -9,11 +9,12 @@ from wandb.sdk import AlertLevel
 class WandbHandler(logging.Handler):
     """A logging handler that routes log records to Weights & Biases.
 
+    Runs in offline mode by default. To upload later: `wandb sync wandb/`
+
     - WARNING and above  → wandb.alert()  (one-shot events: non-finite loss, load failures, etc.)
     - INFO and below     → wandb.run.notes / console only; not forwarded to avoid noise
     """
 
-    # Levels that deserve a W&B alert rather than a metric log.
     _ALERT_LEVELS = frozenset({logging.WARNING, logging.ERROR, logging.CRITICAL})
 
     _WANDB_ALERT_LEVEL = {
@@ -21,6 +22,10 @@ class WandbHandler(logging.Handler):
         logging.ERROR: AlertLevel.ERROR,
         logging.CRITICAL: AlertLevel.ERROR,
     }
+
+    def __init__(self, project: str = "sia-fm-tse", **wandb_kwargs):
+        super().__init__()
+        wandb.init(project=project, mode="offline", **wandb_kwargs)
 
     def emit(self, record: logging.LogRecord) -> None:
         if wandb.run is None:
