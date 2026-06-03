@@ -1,5 +1,7 @@
 """Simple wrapper for pretrained pnenroll encoder"""
 
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 
@@ -14,6 +16,7 @@ from .model.tfgridnet_KVfusion import TFGridNet_KVfusion
 class Encoder(nn.Module):
     def __init__(self):
         """Simple wrapper for pretrained pnenroll encoder"""
+        super().__init__()
         self.model = TFGridNet_origcrossattn_causal_single_emb(
             n_fft=128,
             stride=64,
@@ -43,18 +46,16 @@ class Encoder(nn.Module):
             binaural=False,
         )
 
-    def load(self, path: str):
+    def load(self, path: Path):
         checkpoint = torch.load(path, map_location="cpu")
         self.model.load_state_dict(checkpoint["state_dict"], strict=True)
         self.model.eval()
-        print("[Logger] Loaded frozen PN-TSE encoder")
 
     @torch.no_grad()
     def forward(
         self,
         pos: torch.Tensor,
         neg: torch.Tensor,
-        audio: torch.Tensor,
     ) -> torch.Tensor:
         condition = self.model.encode(
             pos.sum(dim=1),

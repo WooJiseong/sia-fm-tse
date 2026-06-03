@@ -1,0 +1,27 @@
+# ===== Encoder =====
+encoder_ckpt_path: checkpoints/encoder.pt
+
+# ===== Decoder (DiT) =====
+dim: 256
+depth: 8
+n_head: 8
+dim_head: 64
+ff_mult: 4
+dropout: 0.1
+long_skip_connection: false
+cond_drop_prob: 0.1
+
+# ===== Data =====
+n_mels: 100
+sample_rate: 16000
+snr_db_range: [0, 10]
+mixture_speakers: 3
+positive_enroll_speakers: 1
+negative_enroll_speakers: 2
+batch_size: 4
+
+# ===== Training =====
+epochs: 10
+steps_per_epoch: 500
+grad_clip: 1.0
+lr: 1.0e-4

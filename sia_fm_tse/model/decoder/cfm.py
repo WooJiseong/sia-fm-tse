@@ -1,7 +1,5 @@
 """CFM Decoder Implementation"""
 
-from typing import Callable
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,7 +16,6 @@ class CFM(nn.Module):
         transformer: DiT,
         odeint_method: str = "euler",
         cond_drop_prob: float = 0.0,
-        n_channels: int,
     ):
         """
         Continuous Flow Matching (CFM) wrapper around DiT.
@@ -30,10 +27,8 @@ class CFM(nn.Module):
             transformer: DiT backbone
             odeint_conf: ODE solver configuration
             cond_drop_prob: condition drop probability for CFG training
-            n_channels: number of mel-spectrogram channels
         """
         super().__init__()
-        self.n_channels = n_channels
 
         # classifier-free guidance
         self.cond_drop_prob = cond_drop_prob
