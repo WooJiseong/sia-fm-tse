@@ -56,7 +56,7 @@ class CFM(nn.Module):
         steps=32,
         cfg_strength=1.0,
         vocoder: nn.Module | None = None,
-    ):
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Sample clean audio via ODE integration.
 
