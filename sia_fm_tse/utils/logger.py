@@ -8,11 +8,10 @@ from wandb.sdk import AlertLevel
 
 class WandbHandler(logging.Handler):
     """A logging handler that routes log records to Weights & Biases.
-
     Runs in offline mode by default. To upload later: `wandb sync wandb/`
-
-    - WARNING and above  → wandb.alert()  (one-shot events: non-finite loss, load failures, etc.)
-    - INFO and below     → wandb.run.notes / console only; not forwarded to avoid noise
+    - dict msg           -> wandb.log()  (metrics)
+    - WARNING and above  -> wandb.alert()  (non-finite loss, load failures, etc.)
+    - INFO and below     -> console only via stream handler
     """
 
     _ALERT_LEVELS = frozenset({logging.WARNING, logging.ERROR, logging.CRITICAL})
@@ -31,15 +30,13 @@ class WandbHandler(logging.Handler):
         if wandb.run is None:
             return
 
-        msg = self.format(record)
+        if isinstance(record.msg, dict):
+            wandb.log(record.msg)
+            return
 
         if record.levelno in self._ALERT_LEVELS:
             wandb.run.alert(
                 title=f"[{record.module}] {record.levelname}",
-                text=msg,
+                text=self.format(record),
                 level=self._WANDB_ALERT_LEVEL[record.levelno],
             )
-        else:
-            # INFO-level logs are printed to the console by the stream handler;
-            # forwarding every progress line to W&B would pollute the dashboard.
-            pass

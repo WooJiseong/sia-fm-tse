@@ -7,7 +7,7 @@ Target Speaker Extraction via Positive/Negative Enrollment + Flow Matching decod
 ## Requirements
 
 - Python 3.10+
-- [uv](https://docs.astral.sh/uv/)
+- [uv](https://docs.astral.sh/uv/) (Recommended, but optional)
 - CUDA 11.8 (matching the torch build)
 
 ---
@@ -18,6 +18,12 @@ Target Speaker Extraction via Positive/Negative Enrollment + Flow Matching decod
 just setup
 # or manually
 uv sync --frozen && uv add . --dev --editable
+```
+
+If you don't use uv,
+
+```bash
+pip install -r requirements.txt
 ```
 
 ---
