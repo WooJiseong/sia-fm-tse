@@ -36,3 +36,6 @@ wandb/
 # ===== Secrets =====
 .env
 credentials.yaml
+
+# ===== Slurm =====
+*.sbatch
