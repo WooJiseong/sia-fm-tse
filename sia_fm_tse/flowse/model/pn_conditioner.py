@@ -196,6 +196,81 @@ class PNFull2DProjector(nn.Module):
 
         return torch.cat([global_token, tokens], dim=1)
 
+
+class PNTimeProjector(nn.Module):
+    """Project PN embedding to time-axis tokens for cross-attention.
+
+    Input:
+        cond_emb: [B, C, T, F]
+
+    Output:
+        tokens: [B, 1 + T, D] if add_global_token=True
+                [B, T, D] otherwise
+    """
+
+    def __init__(
+        self,
+        spk_dim: int = 64,
+        freq_bins: int = 65,
+        out_dim: int = 1024,
+        dropout: float = 0.0,
+        add_global_token: bool = True,
+        max_tokens: int | None = None,
+    ):
+        super().__init__()
+
+        self.spk_dim = spk_dim
+        self.freq_bins = freq_bins
+        self.out_dim = out_dim
+        self.add_global_token = add_global_token
+        self.max_tokens = max_tokens
+
+        self.norm = nn.LayerNorm(spk_dim * freq_bins)
+        self.proj = nn.Sequential(
+            nn.Linear(spk_dim * freq_bins, out_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(out_dim, out_dim),
+        )
+        self.global_proj = (
+            nn.Sequential(
+                nn.LayerNorm(spk_dim),
+                nn.Linear(spk_dim, out_dim),
+            )
+            if add_global_token
+            else None
+        )
+
+    def forward(self, cond_emb: torch.Tensor) -> torch.Tensor:
+        if cond_emb.ndim != 4:
+            raise ValueError(f"expected [B, C, T, F], got {tuple(cond_emb.shape)}")
+
+        B, C, T, F = cond_emb.shape
+        if C != self.spk_dim:
+            raise ValueError(f"expected C={self.spk_dim}, got C={C}")
+        if F != self.freq_bins:
+            raise ValueError(f"expected F={self.freq_bins}, got F={F}")
+
+        tokens = cond_emb.permute(0, 2, 1, 3).reshape(B, T, C * F)
+        tokens = self.proj(self.norm(tokens))
+
+        if self.max_tokens is not None and tokens.shape[1] > self.max_tokens:
+            idx = torch.linspace(
+                0,
+                tokens.shape[1] - 1,
+                steps=self.max_tokens,
+                device=tokens.device,
+            ).long()
+            tokens = tokens.index_select(dim=1, index=idx)
+
+        if not self.add_global_token:
+            return tokens
+
+        global_feat = cond_emb.mean(dim=(2, 3))
+        global_token = self.global_proj(global_feat).unsqueeze(1)
+        return torch.cat([global_token, tokens], dim=1)
+
+
 def _infer_mel_dim(base_dit: nn.Module) -> int:
     if hasattr(base_dit, "mel_dim"):
         return int(base_dit.mel_dim)
@@ -257,6 +332,8 @@ class PNDiT(nn.Module):
         if injection_mode not in {"output", "block"}:
             raise ValueError(f"unknown injection_mode: {injection_mode}")
 
+        # Different PN tokenizations let us compare frequency pooling, full TF tokens,
+        # and T-axis attention without touching the training loop.
         if token_mode == "freq_pool":
             self.pn_projector = PNEmbeddingProjector(
                 spk_dim=spk_dim,
@@ -268,6 +345,15 @@ class PNDiT(nn.Module):
             )
         elif token_mode == "full_2d":
             self.pn_projector = PNFull2DProjector(
+                spk_dim=spk_dim,
+                freq_bins=freq_bins,
+                out_dim=dim,
+                dropout=dropout,
+                add_global_token=True,
+                max_tokens=max_full_tokens,
+            )
+        elif token_mode == "time_flatten":
+            self.pn_projector = PNTimeProjector(
                 spk_dim=spk_dim,
                 freq_bins=freq_bins,
                 out_dim=dim,
@@ -288,8 +374,6 @@ class PNDiT(nn.Module):
 
         self.out_proj = nn.Linear(dim, mel_dim)
 
-        # zero-init gate: 처음에는 pretrained FlowSE 출력을 거의 건드리지 않음
-        # Start with a tiny but non-zero PN residual so gradients reach the adapter.
         # Start with a tiny non-zero residual so gradients reach the adapter.
         self.speaker_attn_gate = nn.Parameter(torch.full((1,), 1e-2))
 
@@ -342,6 +426,7 @@ class PNDiT(nn.Module):
             else:
                 x = block(x, t, mask=mask, rope=rope)
 
+            # This is the stronger conditioning path: PN tokens shape every block.
             if pn_tokens is not None:
                 x = self._apply_pn_hidden(x, pn_tokens)
 
@@ -373,7 +458,7 @@ class PNDiT(nn.Module):
                 pn_tokens=pn_tokens,
             )
 
-        # output-space PN residual injection
+        # Lighter alternative: apply PN residual only to the predicted vector field.
         x = self.base_dit(*args, **kwargs)
 
         query = self.query_proj(x)

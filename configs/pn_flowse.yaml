@@ -1,0 +1,78 @@
+paths:
+  # Match the pnenroll training split by default.
+  librispeech_train: /home1/eri0529/SIA/paper/TSE-through-Positive-Negative-Enroll/data/LibriSpeech/LibriSpeech/train-clean-360
+  wham_noise_train: /home1/eri0529/SIA/paper/TSE-through-Positive-Negative-Enroll/data/wham_noise/tr
+  pn_checkpoint: /home1/eri0529/SIA/paper/TSE-through-Positive-Negative-Enroll/output/proposed-monaural.pt
+  flowse_checkpoint: null
+  flowse_config: sia_fm_tse/flowse/config/train.yaml
+  save_dir: outputs/pn_flowse
+  log_dir: outputs/pn_flowse/tensorboard
+
+data:
+  sample_rate: 16000
+  wave_seconds: 3
+  source_num: 3
+  min_source_num: 3
+  enroll_num: 3
+  min_enroll_num: 3
+  # pnenroll convention: target speakers in enrollment are audio[:, :active_num[1]].
+  active_num: [-1, 1, -1]
+  snr_db_range: [-3, 3]
+  filling_pattern: repeat
+  dvec_rate: 50
+  reverb: none
+  reverb_cond: false
+  binaural: false
+  zero_in_tgt: false
+  same_disturb: false
+  special_spk: ["Partial_Pos", "Partial_Neg"]
+  partial_range: [0.33, 0.66]
+  neg_partial_range: [1.0, 1.0]
+
+pn_encoder:
+  strict_load: true
+
+flowse:
+  # scratch keeps the decoder compact; pretrained reuses the original FlowSE ckpt.
+  init: scratch   # scratch | pretrained
+  load_strict: true
+  # all trains the compact decoder; tail is useful when starting from pretrained.
+  train_mode: all # none | tail | all
+  train_last_blocks: 4
+  audio_drop_prob: 0.1
+  cond_drop_prob: 0.1
+  text_num_embeds: 256
+  # time_flatten attends over T after flattening F*C, matching the TSE discussion.
+  token_mode: time_flatten # freq_pool | full_2d | time_flatten
+  injection_mode: block    # output | block
+  max_pn_tokens: null
+  pn_dropout: 0.0
+  clean_est_l1_weight: 1.0
+  arch:
+    dim: 256
+    depth: 8
+    heads: 8
+    ff_mult: 2
+    text_dim: 128
+    conv_layers: 0
+    checkpoint_activations: false
+  mel_spec:
+    target_sample_rate: 24000
+    n_mel_channels: 100
+    hop_length: 256
+    win_length: 1024
+    n_fft: 1024
+    mel_spec_type: vocos
+
+train:
+  batch_size: 8
+  epochs: 100
+  steps_per_epoch: 1000
+  lr: 1.0e-4
+  flowse_lr: 1.0e-5
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  num_workers: 0
+  log_interval: 20
+  save_every_epoch: 1
+  seed: 1234

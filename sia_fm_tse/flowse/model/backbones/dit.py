@@ -119,6 +119,8 @@ class DiT(nn.Module):
 
         self.dim = dim
         self.depth = depth
+        self.heads = heads
+        self.mel_dim = mel_dim
 
         self.transformer_blocks = nn.ModuleList(
             [DiTBlock(dim=dim, heads=heads, dim_head=dim_head, ff_mult=ff_mult, dropout=dropout) for _ in range(depth)]

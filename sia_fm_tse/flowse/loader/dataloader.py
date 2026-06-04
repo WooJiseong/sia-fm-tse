@@ -18,9 +18,7 @@ import os
 from pypinyin import pinyin, lazy_pinyin,Style
 from tqdm import tqdm
 import json
-import sys
-sys.path.append("../")
-from model.modules import MelSpec
+from ..model.modules import MelSpec
 EPS = np.finfo(float).eps
 
 

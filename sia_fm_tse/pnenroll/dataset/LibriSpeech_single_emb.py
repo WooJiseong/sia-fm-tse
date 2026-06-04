@@ -3,11 +3,22 @@ import random
 
 import librosa
 import numpy as np
-import sofa
 import torch
 import torchaudio
 from resemblyzer import VoiceEncoder, preprocess_wav, trim_long_silences
 from torch.utils.data import Dataset
+
+
+def _open_sofa(path):
+    try:
+        import sofa
+
+        return sofa.Database.open(path)
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "The optional `sofa` package is required only when reverb uses SOFA "
+            "BRIR files. Install it or run with reverb='none'."
+        ) from exc
 
 
 class CIPIC_simulator:
@@ -18,7 +29,7 @@ class CIPIC_simulator:
         CIPIC_rir_scenes = [
             f"{CIPIC_dir}/{f}" for f in os.listdir(CIPIC_dir) if f.endswith(".sofa")
         ]
-        self.CIPIC_rir_scenes = [sofa.Database.open(sid) for sid in CIPIC_rir_scenes]
+        self.CIPIC_rir_scenes = [_open_sofa(sid) for sid in CIPIC_rir_scenes]
         self.face_to_face_idx = 608
 
     def sample_one_scene(self):
@@ -52,7 +63,7 @@ class RRBRIR_simulator:
         RRBRIR_rir_scenes = [
             f"{RRBRIR_dir}/{f}" for f in os.listdir(RRBRIR_dir) if f.endswith(".sofa")
         ]
-        self.RRBRIR_rir_scenes = [sofa.Database.open(sid) for sid in RRBRIR_rir_scenes]
+        self.RRBRIR_rir_scenes = [_open_sofa(sid) for sid in RRBRIR_rir_scenes]
         self.face_to_face_idx = 18
 
     def sample_one_scene(self):
@@ -715,7 +726,8 @@ class LibriDataset_single_emb(Dataset):
 
             noise_name = random.sample(self.noise_names, 1)[0]
             noise, _ = self.load_and_repeat(
-                self.noise_dir + noise_name,
+                # Accept both `.../tr` and `.../tr/` from config.
+                os.path.join(self.noise_dir, noise_name),
                 self.wave_length + self.pos_example_length + self.neg_example_length,
                 remove_zero=False,
                 filling_pattern="repeat",

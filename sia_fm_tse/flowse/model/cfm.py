@@ -1,9 +1,5 @@
 
-
 from __future__ import annotations
-import sys
-import os
-sys.path.append(os.path.dirname(__file__))
 from random import random
 from typing import Callable
 
@@ -12,8 +8,8 @@ import torch.nn.functional as F
 from torch import nn
 from torchdiffeq import odeint
 
-from modules import MelSpec
-from model.model_utils import (
+from .modules import MelSpec
+from .model_utils import (
     default,
     exists,
     list_str_to_idx,
@@ -84,13 +80,20 @@ class CFM(nn.Module):
       
         *,
         steps=32,
-        cfg_strength=1.0,
+        cfg_strength=None,
         vocoder: Callable[[float["b d n"]], float["b nw"]] | None = None,  # noqa: F722
         no_ref_audio=False,
         drop_text=False,
         cond_emb=None,
     ):
         self.eval()
+        # CFG only makes sense if the model saw dropped conditions during training.
+        if cfg_strength is None:
+            cfg_strength = (
+                1.0
+                if self.audio_drop_prob > 0.0 or self.cond_drop_prob > 0.0
+                else 0.0
+            )
         # raw wave
 
         if cond.ndim == 2:
@@ -209,9 +212,9 @@ class CFM(nn.Module):
         # time step
         time = torch.rand((batch,), dtype=dtype, device=self.device)
 
-        # sample xt (φ_t(x) in the paper)
+        # sample xt (phi_t(x) in the paper)
         t = time.unsqueeze(-1).unsqueeze(-1)
-        φ = (1 - t) * x0 + t * x1
+        xt = (1 - t) * x0 + t * x1
         flow = x1 - x0
 
         # only predict what is within the random mask span for infilling
@@ -229,7 +232,12 @@ class CFM(nn.Module):
             drop_text = False
 
         pred = self.transformer(
-            x=φ, cond=cond, text=text, time=time, drop_audio_cond=drop_audio_cond, drop_text=drop_text
+            x=xt,
+            cond=cond,
+            text=text,
+            time=time,
+            drop_audio_cond=drop_audio_cond,
+            drop_text=drop_text,
         )
 
         # flow matching loss
@@ -240,4 +248,3 @@ class CFM(nn.Module):
 
 if __name__ == "__main__":
     model = CFM()
-    

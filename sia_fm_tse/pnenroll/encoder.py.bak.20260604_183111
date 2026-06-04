@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import torch
+from torch import nn
+
+from .model import (
+    GridNetBlock_attnhead,
+    TFGridNet_KVfusion,
+    TFGridNet_encoder,
+    TFGridNet_origcrossattn_causal_single_emb,
+)
+
+
+def build_pn_encoder() -> TFGridNet_origcrossattn_causal_single_emb:
+    # Keep these hyperparameters aligned with proposed-monaural.pt.
+    encoder = TFGridNet_encoder(
+        num_ch=2,
+        n_fft=128,
+        stride=64,
+        num_blocks=3,
+        binaural=False,
+    )
+
+    encoder_head = GridNetBlock_attnhead(
+        layer_num=2,
+        pooling_size=1,
+        stride=1,
+    )
+
+    return TFGridNet_origcrossattn_causal_single_emb(
+        n_fft=128,
+        stride=64,
+        n_layers=3,
+        lstm_hidden_units=64,
+        emb_dim=64,
+        emb_ks=1,
+        model_normalize=True,
+        Fusion_class=TFGridNet_KVfusion,
+        pooling_size=40,
+        fusion_stride=40,
+        encoder=encoder,
+        encoder_head=encoder_head,
+        train_encoder=False,
+        train_encoder_head=False,
+        fusion_layer=[0, 1],
+        binaural=False,
+    )
+
+
+def load_frozen_pn_encoder(
+    checkpoint_path: str | Path,
+    device: torch.device | str,
+    *,
+    strict: bool = True,
+) -> nn.Module:
+    model = build_pn_encoder().to(device)
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    state_dict = checkpoint.get("state_dict", checkpoint)
+    model.load_state_dict(state_dict, strict=strict)
+    model.eval()
+
+    # The PN model acts as a frozen condition encoder in this training path.
+    for param in model.parameters():
+        param.requires_grad = False
+
+    return model
