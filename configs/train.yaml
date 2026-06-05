@@ -10,6 +10,8 @@ ff_mult: 4
 dropout: 0.1
 long_skip_connection: true
 cond_drop_prob: 0.1
+cond_in_ch: 64
+cond_in_freq: 65
 
 # ===== Data =====
 n_mels: 100

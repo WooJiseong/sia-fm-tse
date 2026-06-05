@@ -58,6 +58,8 @@ def main(handler: logging.Handler):
         ff_mult=conf.ff_mult,
         mel_dim=conf.n_mels,
         long_skip_connection=conf.long_skip_connection,
+        cond_in_ch=conf.cond_in_ch,
+        cond_in_freq=conf.cond_in_freq,
     )
     decoder = CFM(
         transformer=transformer,

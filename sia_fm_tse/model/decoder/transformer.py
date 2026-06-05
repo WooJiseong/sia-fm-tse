@@ -5,7 +5,14 @@ import torch
 import torch.nn as nn
 from x_transformers.x_transformers import RotaryEmbedding
 
-from .modules import FeedForward, InputEmbedding, MHAttention, TimestepEmbedding
+from .modules import (
+    ConditionEmbedding,
+    FeedForward,
+    InputEmbedding,
+    MHAttention,
+    MHCrossAttention,
+    TimestepEmbedding,
+)
 
 
 class AdaLNZero(nn.Module):
@@ -140,18 +147,17 @@ class DiTBlock(nn.Module):
         dropout: float,
     ) -> None:
         """
-        DiT Block for Diffusion Transformer,
-        which consisted with attention layer, and FFN.
+        DiT Block: Self-Attention → FFN → Cross-Attention, each wrapped in adaLN-Zero.
 
-        Both attention layer and FFN uses adaLN-zero.
+        x: [B, T, D]  main sequence (mel frames)
+        c: [B, T_c, D]  encoder condition (may have different length T_c)
+        t: [B, D]       timestep embedding
 
-        x: [B, T, D]
-
-                 ┌───adaLN-zero───┐     ┌───────adaLN-zero────────┐
-         x --->  │ Self-Attention │ --> │ Feed-Foward (× ff_mult) │  --> out
-            │    └────────────────┘     └─────────────────────────┘   │
-            │                                                         │
-            └──────────────────(Residual Connection)──────────────────┘
+                 ┌───adaLN-zero───┐     ┌───────adaLN-zero─────────┐     ┌────────adaLN-zero─────────┐
+         x --->  │ Self-Attention │ --> │ Feed-Forward (× ff_mult) │ --> │ Cross-Attention (c as KV) │ --> out
+            │    └────────────────┘     └──────────────────────────┘     └───────────────────────────┘  │
+            │                                                                                           │
+            └──────────────────────────────────(Residual)───────────────────────────────────────────────┘
         """
 
         super().__init__()
@@ -174,28 +180,39 @@ class DiTBlock(nn.Module):
                 approximate="tanh",
             ),
         )
+        self.cross_attention = AdaLNZero(
+            dim,
+            layer=MHCrossAttention(
+                dim=dim,
+                n_head=n_head,
+                dim_head=dim_head,
+                dropout=dropout,
+            ),
+        )
 
     def forward(
         self,
         x: torch.Tensor,
         t: torch.Tensor,
+        c: torch.Tensor,
         *,
         mask: torch.Tensor | None = None,
         rope: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """DiT Block forward
+        """
         Args:
-            x: [B, N, D] Tensor
-            t: [B, D] Tensor
-            mask: Optional [B, N] Tensor
-            rope: Optional (float, [B N] Tensor)
+            x:    [B, T, D] main sequence
+            t:    [B, D] timestep embedding (adaLN condition)
+            c:    [B, T_c, D] encoder condition — T_c may differ from T
+            mask: Optional [B, T] boolean Tensor for self-attention (True = valid)
+            rope: Optional (freqs, xpos_scale)
 
         Returns:
-            x: [B, N, D] Tensor
+            x: [B, T, D]
         """
-
         x = self.attention(x, c=t, mask=mask, rope=rope)
         x = self.ffn(x, c=t)
+        x = self.cross_attention(x, c=t, context=c, rope=rope)
         return x
 
 
@@ -210,38 +227,52 @@ class DiT(nn.Module):
         dropout: float = 0.1,
         ff_mult: int = 4,
         mel_dim: int = 100,
+        cond_in_ch: int = 64,
+        cond_in_freq: int = 65,
         long_skip_connection: bool = False,
     ):
         """
-        Diffusion Transformer (DiT)
-        - https://arxiv.org/pdf/2212.09748
+        Diffusion Transformer (DiT) — https://arxiv.org/pdf/2212.09748
 
-        Transformer-based diffusion model backbone.
-        Takes noisy mel-spectrogram x and condition c,
-        returns denoised prediction.
+        x and m are jointly embedded via InputEmbedding (mel_dim*2 -> dim).
+        c (raw encoder output) is independently embedded via ConditionEmbedding
+        (cond_in_ch * cond_in_freq -> dim), which handles channel/freq flattening.
+        c may have a different sequence length T_c; cross-attention handles this naturally.
 
-        Timestep t is embedded via sinusoidal encoding + MLP,
-        and injected into each DiTBlock via adaLN-Zero conditioning.
-
-        x: [B, T, D_x]
-        c: [B, T, D_c]   <- in our case, uses encoder condition *c* and audio mixture *m* as condition
+        c: [B, C, T_c, F]  <- raw encoder output (T_c may differ from T)
+        m: [B, T, mel_dim] <- mixture mel-spectrogram
+        x: [B, T, mel_dim] <- noisy mel-spectrogram
         t: [B]
 
-         x, c ─────────────────────────────┐    ╭────────╮
-                 ┌─────────────────────┐   ├--> │ Concat │ --> e
-         t --->  │ Sinusoidal Encoding │ ──┘    ╰────────╯
-                 └─────────────────────┘
+                   ╭──────────────────────────╮
+         x, m -->  │ InputEmbedding           │ --> x_emb [B, T, D]
+                   │ (mel_dim*2 -> dim)       │
+                   ╰──────────────────────────╯
 
-               ┌───────────┐             ┌───────┐     ┌────────┐
-         e --> │ DiT Block │ × depth --> │ adaLN │ --> │ Linear │ --> out
-               └───────────┘          │  └───────┘     └────────┘
-         x ──────────(+Skip)──────────┘
+                 ╭──────────────────────────╮
+         c  -->  │ ConditionEmbedding       │ --> c_emb [B, T_c, D]
+                 │ (C*F -> dim, ConvPosEmb) │
+                 ╰──────────────────────────╯
+
+                 ┌───────────────────┐
+         t --->  │ Timestep Encoding │
+                 └───────────────────┘
+                          ┌────┴────────────────────────┐
+                  ┌───────────┐                     ┌───────┐     ┌────────┐
+        x_emb --> │ DiT Block │ × depth ----------> │ adaLN │ --> │ Linear │ --> out
+                  └───────────┘                 │   └───────┘     └────────┘
+        c_emb ─────────┘ (cross-attn, T_c≠T OK) │
+        x_emb ──────────────────(+Skip)─────────┘
         """
         super().__init__()
         self.time_emb = TimestepEmbedding(dim)
-        self.input_emb = InputEmbedding(mel_dim * 3, out_dim=dim)
+        self.input_emb = InputEmbedding(mel_dim * 2, out_dim=dim)
+        self.cond_emb = ConditionEmbedding(
+            in_ch=cond_in_ch, in_freq=cond_in_freq, out_dim=dim
+        )
         self.rotary_emb = RotaryEmbedding(dim_head)
         self.dim = dim
+        self.mel_dim = mel_dim
         self.depth = depth
         self.transformer_blocks = nn.ModuleList(
             DiTBlock(
@@ -256,13 +287,7 @@ class DiT(nn.Module):
         self.norm = AdaLN(dim)
         self.projection = nn.Linear(dim, mel_dim)
         self.long_skip_connection = (
-            nn.Linear(
-                dim * 2,
-                dim,
-                bias=False,
-            )
-            if long_skip_connection
-            else None
+            nn.Linear(dim * 2, dim, bias=False) if long_skip_connection else None
         )
 
     def forward(
@@ -277,23 +302,24 @@ class DiT(nn.Module):
         Args:
             x: [B, T, mel_dim] noisy mel-spectrogram
             m: [B, T, mel_dim] mixture mel-spectrogram
-            c: [B, T, mel_dim] `cond_emb` from encoder
+            c: [B, C, T_c, F] raw encoder output (T_c may differ from T)
             t: [B] diffusion timestep
-            mask: Optional [B, T] boolean Tensor (True = valid)
+            mask: Optional [B, T] boolean Tensor for self-attention (True = valid)
 
         Returns:
-            out: [B, T, mel_dim] denoised prediction
+            out: [B, T, mel_dim]
         """
         seq_len = x.shape[1]
         t = self.time_emb(t)
-        x = self.input_emb(x, m, c)
+        x = self.input_emb(x, m)
+        c = self.cond_emb(c)
         rope = self.rotary_emb.forward_from_seq_len(seq_len)
 
         if self.long_skip_connection is not None:
             residual = x
 
         for block in self.transformer_blocks:
-            x = block(x, t, mask=mask, rope=rope)
+            x = block(x, t, c, mask=mask, rope=rope)
 
         if self.long_skip_connection is not None:
             x = self.long_skip_connection(torch.cat((x, residual), dim=-1))

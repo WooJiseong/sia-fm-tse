@@ -80,6 +80,8 @@ def train(handler: logging.Handler):
         ff_mult=conf.ff_mult,
         mel_dim=conf.n_mels,
         long_skip_connection=conf.long_skip_connection,
+        cond_in_ch=conf.cond_in_ch,
+        cond_in_freq=conf.cond_in_freq,
     )
 
     decoder = CFM(
@@ -160,16 +162,14 @@ def train(handler: logging.Handler):
         target = audio[:, :enroll_speakers].sum(dim=1).squeeze(1)
 
         with torch.no_grad():
-            condition = encoder(pos, neg)
+            condition = encoder(pos, neg)      # [B, C, T_enc, F] — passed directly
 
-            # Resample for decoding
+            # Resample and convert to mel spectrogram
             mixture = resampler(mixture)
             target = resampler(target)
-
-            # Get Mel-Spectrogram
-            noise = get_vocos_mel_spectrogram(mixture)
-            clean = get_vocos_mel_spectrogram(target)
-            noise = rearrange(noise, "b d n -> b n d")  # actually d = 1 😅
+            noise = get_vocos_mel_spectrogram(mixture, n_mel_channels=conf.n_mels)
+            clean = get_vocos_mel_spectrogram(target, n_mel_channels=conf.n_mels)
+            noise = rearrange(noise, "b d n -> b n d")
             clean = rearrange(clean, "b d n -> b n d")
 
         optimizer.zero_grad()

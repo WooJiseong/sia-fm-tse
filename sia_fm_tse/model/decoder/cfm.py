@@ -135,7 +135,7 @@ class CFM(nn.Module):
             )
             < self.cond_drop_prob
         )
-        drop_cond_mask = rearrange(drop_cond_mask, "b -> b 1 1")
+        drop_cond_mask = rearrange(drop_cond_mask, "b -> b 1 1 1")
         c = torch.where(drop_cond_mask, torch.zeros_like(c), c)
 
         pred = self.transformer(x=φ, m=m, c=c, t=t)

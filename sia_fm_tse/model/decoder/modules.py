@@ -139,6 +139,70 @@ class MHAttention(nn.Module):
         return out
 
 
+class MHCrossAttention(nn.Module):
+    def __init__(
+        self,
+        *,
+        dim: int,
+        n_head: int = 8,
+        dim_head: int = 64,
+        dropout: float = 0,
+    ):
+        super().__init__()
+        self.n_head = n_head
+        self.dropout = dropout
+        self.inner_dim = dim_head * n_head
+        self.linear_q = nn.Linear(dim, self.inner_dim)
+        self.linear_k = nn.Linear(dim, self.inner_dim)
+        self.linear_v = nn.Linear(dim, self.inner_dim)
+        self.out_proj = nn.Sequential(
+            nn.Linear(self.inner_dim, dim),
+            nn.Dropout(dropout),
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        context: torch.Tensor,
+        mask: torch.Tensor | None = None,
+        rope: tuple[torch.Tensor, float] | None = None,
+    ) -> torch.Tensor:
+        """
+        Args:
+            x:       [B, N, D] query source
+            context: [B, N, D] key/value source (same length as x)
+            mask:    Optional [B, N] boolean Tensor — masks both attention and output
+            rope:    Optional (freqs, xpos_scale) — applied to Q only
+        Returns:
+            out: [B, N, D]
+        """
+        query = rearrange(self.linear_q(x), "b n (h d) -> b h n d", h=self.n_head)
+        key = rearrange(self.linear_k(context), "b n (h d) -> b h n d", h=self.n_head)
+        value = rearrange(self.linear_v(context), "b n (h d) -> b h n d", h=self.n_head)
+
+        if rope is not None:
+            freqs, xpos_scale = rope
+            xpos_scale = xpos_scale if xpos_scale is not None else 1
+            query = apply_rotary_pos_emb(query, freqs, xpos_scale)  # type: ignore
+
+        attn_mask = None if mask is None else rearrange(mask, "b n -> b 1 1 n")
+        out = F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            attn_mask=attn_mask,
+            dropout_p=self.dropout,
+            is_causal=False,
+        )
+        out = rearrange(out, "b h n d -> b n (h d)").to(value.dtype)
+        out = self.out_proj(out)
+
+        if mask is not None:
+            out = out.masked_fill(~rearrange(mask, "b n -> b n 1"), 0.0)
+
+        return out
+
+
 class SinusoidalPositionalEmbedding(torch.nn.Module):
     def __init__(self, dim: int):
         """
@@ -250,6 +314,37 @@ class ConvPositionalEmbedding(nn.Module):
             out = out.masked_fill(~mask, 0.0)
 
         return out
+
+
+class ConditionEmbedding(nn.Module):
+    def __init__(self, in_ch: int, in_freq: int, out_dim: int):
+        """
+        Embeds raw encoder output into a sequence of D-dim vectors.
+
+        Flattens the channel and frequency axes, projects to out_dim,
+        then adds convolutional positional embedding.
+
+        Args:
+            in_ch:   number of channels in encoder output (C dimension)
+            in_freq: number of frequency bins in encoder output (F dimension)
+            out_dim: output embedding dimension (= DiT dim)
+        """
+        super().__init__()
+        self.projection = nn.Linear(in_ch * in_freq, out_dim)
+        self.conv_pos_emb = ConvPositionalEmbedding(dim=out_dim)
+
+    def forward(self, c: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            c: [B, C, T, F] raw encoder output
+
+        Returns:
+            [B, T, out_dim]
+        """
+        c = rearrange(c, "b ch t f -> b t (ch f)")
+        c = self.projection(c)
+        c = self.conv_pos_emb(c) + c
+        return c
 
 
 class InputEmbedding(nn.Module):

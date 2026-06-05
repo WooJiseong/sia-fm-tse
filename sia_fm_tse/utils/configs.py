@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, FilePath
@@ -30,7 +31,6 @@ class DecoderConfig(DiTBlockConfig):
     dim: int = Field(
         ...,
         description="Dimension of embedded tensor for DiT, so called D",
-        frozen=True,
     )
     depth: int = Field(
         default=8,
@@ -47,6 +47,14 @@ class DecoderConfig(DiTBlockConfig):
     cond_drop_prob: float = Field(
         default=0, description="CFM condition drop probability for DiT"
     )
+    cond_in_ch: Literal[64] = Field(
+        default=64,
+        description="Channel dim of raw encoder output — fixed by pretrained encoder",
+    )
+    cond_in_freq: Literal[65] = Field(
+        default=65,
+        description="Frequency dim of raw encoder output — fixed by pretrained encoder",
+    )
 
 
 class ModelConfig(EncoderConfig, DecoderConfig): ...
@@ -57,10 +65,9 @@ class DataConfig(BaseModel):
         default=100,
         description="Number of mel filterbanks for data",
     )
-    sample_rate: int = Field(
+    sample_rate: Literal[16000] = Field(
         default=16000,
-        description="(Constant) Sample rate for whole model",
-        frozen=True,
+        description="Sample rate for whole model — fixed by pretrained encoder",
     )
     snr_db_range: tuple[int, int] = Field(
         default=(0, 0),
@@ -122,4 +129,4 @@ def load_eval_config(path: str) -> EvalConf:
 def load_config(path: str) -> TrainConf:
     with Path(path).open() as f:
         data = yaml.safe_load(f)
-    return TrainConf.model_validate(data, strict=True)
+    return TrainConf.model_validate(data, strict=False)

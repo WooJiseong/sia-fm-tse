@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 import torchaudio
-from einops import reduce
+from einops import rearrange
 from vocos import Vocos
 
+from ..utils import get_vocos_mel_spectrogram
 from .decoder import CFM as Decoder
 from .encoder import Encoder
 
@@ -11,24 +12,16 @@ from .encoder import Encoder
 class FlowTSE(nn.Module):
     def __init__(self, encoder: Encoder, decoder: Decoder):
         """
-        full model for TSE PN encoder and CFM based Decoder
-
-        **WARNING**
-        This model uses just condition concatenation,
-        not cross-attention based injection.
-        > See decoder.transformer.DiT
-
-        Sampling:
+        Full model for TSE with PN encoder and CFM-based decoder.
+        Condition c is injected via cross-attention inside DiT.
 
          pos --> ┌─────────┐
-                 │ Encoder │ --> c
+                 │ Encoder │ --> c  (reduce + interpolate to mel T)
          neg --> └─────────┘
 
-         m(=x) -->  ┌─────────┐
-                    │ Decoder │ --> output waveform/mel-spectrogram
-         c -------> └─────────┘      (w/ trajectory)
-
-        On traning, you should use
+         x  --> resample --> mel --> ┌─────────┐
+                                     │ Decoder │ --> waveform (w/ trajectory)
+         c ------------------------> └─────────┘
         """
         super().__init__()
         self.encoder = encoder
@@ -50,24 +43,27 @@ class FlowTSE(nn.Module):
         cfg_strength: float = 1.0,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Sample clean audio from mixture
+        Sample clean audio from mixture.
 
         Args:
-            x: [B, C, T, mel_dim] audio mixture
-            pos: [B, C, T, mel_dim] positive embedding
-            neg: [B, C, T, mel_dim] positive embedding
+            x: [B, T_audio] mixture waveform at 16kHz
+            pos: [B, n_pos, T_audio] positive enrollment waveforms at 16kHz
+            neg: [B, n_neg, T_audio] negative enrollment waveforms at 16kHz
 
         Returns:
-            out: [B, nw]
+            out:        [B, nw] output waveform
             trajectory: [steps+1, B, T, mel_dim] ODE trajectory
         """
+        c = self.encoder(pos, neg)  # [B, C, T_enc, F] — passed directly
 
-        c = self.encoder(pos, neg)
-        c = reduce(c, "b c t f -> b t f", "mean")
         x = self.resampler(x)
+        m = get_vocos_mel_spectrogram(
+            x, n_mel_channels=self.decoder.transformer.mel_dim
+        )
+        m = rearrange(m, "b d n -> b n d")  # [B, T_mel, mel_dim]
 
         out, trajectory = self.decoder(
-            x,
+            m,
             c,
             steps=steps,
             cfg_strength=cfg_strength,
