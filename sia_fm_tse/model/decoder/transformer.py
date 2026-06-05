@@ -147,15 +147,15 @@ class DiTBlock(nn.Module):
         dropout: float,
     ) -> None:
         """
-        DiT Block: Self-Attention → FFN → Cross-Attention, each wrapped in adaLN-Zero.
+        DiT Block: Self-Attention → Cross-Attention → FFN, each wrapped in adaLN-Zero.
 
         x: [B, T, D]  main sequence (mel frames)
         c: [B, T_c, D]  encoder condition (may have different length T_c)
         t: [B, D]       timestep embedding
 
-                 ┌───adaLN-zero───┐     ┌───────adaLN-zero─────────┐     ┌────────adaLN-zero─────────┐
-         x --->  │ Self-Attention │ --> │ Feed-Forward (× ff_mult) │ --> │ Cross-Attention (c as KV) │ --> out
-            │    └────────────────┘     └──────────────────────────┘     └───────────────────────────┘  │
+                 ┌───adaLN-zero───┐     ┌────────adaLN-zero─────────┐     ┌───────adaLN-zero─────────┐
+         x --->  │ Self-Attention │ --> │ Cross-Attention (c as KV) │ --> │ Feed-Forward (× ff_mult) │ --> out
+            │    └────────────────┘     └───────────────────────────┘     └──────────────────────────┘  │
             │                                                                                           │
             └──────────────────────────────────(Residual)───────────────────────────────────────────────┘
         """
@@ -211,8 +211,8 @@ class DiTBlock(nn.Module):
             x: [B, T, D]
         """
         x = self.attention(x, c=t, mask=mask, rope=rope)
-        x = self.ffn(x, c=t)
         x = self.cross_attention(x, c=t, context=c, rope=rope)
+        x = self.ffn(x, c=t)
         return x
 
 
