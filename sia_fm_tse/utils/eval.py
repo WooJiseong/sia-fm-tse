@@ -12,7 +12,7 @@ from torchmetrics.metric import Metric
 from tqdm import tqdm
 
 from . import LibriDataset
-from .configs import DataConfig
+from .configs import EvalConf
 
 
 class DeepNoiseSuppressionMeanOpinionScore(Metric):
@@ -34,7 +34,7 @@ class DeepNoiseSuppressionMeanOpinionScore(Metric):
 @torch.no_grad()
 def eval(
     model: nn.Module,
-    conf: DataConfig,
+    conf: EvalConf,
     *,
     data_dir: str,
     noise_dir: str,

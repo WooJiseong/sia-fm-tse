@@ -2,6 +2,7 @@
 encoder_ckpt_path: checkpoints/encoder.pt
 
 # ===== Decoder (DiT) =====
+decoder_ckpt_path:
 dim: 256
 depth: 8
 n_head: 8

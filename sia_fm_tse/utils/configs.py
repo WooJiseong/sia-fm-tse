@@ -44,7 +44,6 @@ class DecoderConfig(DiTBlockConfig):
         default=False,
         description="Skip-connection from x to post-DiT-Block for DiT",
     )
-
     cond_drop_prob: float = Field(
         default=0, description="CFM condition drop probability for DiT"
     )
@@ -73,19 +72,19 @@ class DataConfig(BaseModel):
     )
     positive_enroll_speakers: int = Field(
         default=1,
-        description="Number of speakers in positiive audio enrollment",
+        description="Number of speakers in positive audio enrollment",
     )
     negative_enroll_speakers: int = Field(
         default=2,
         description="Number of speakers in negative audio enrollment",
     )
+
+
+class TrainConfig(BaseModel):
     batch_size: int = Field(
         default=4,
         description="Size of batch from dataset",
     )
-
-
-class TrainConfig(BaseModel):
     epochs: int = Field(
         default=10,
         description="Number of epochs for training",
@@ -104,11 +103,23 @@ class TrainConfig(BaseModel):
     )
 
 
-class Config(ModelConfig, DataConfig, TrainConfig): ...
+class EvalConf(ModelConfig, DataConfig):
+    decoder_ckpt_path: FilePath = Field(
+        ...,
+        description="Trained `decoder.pt` checkpoint path.",
+    )
 
 
-def load_config(path: str) -> Config:
+class TrainConf(ModelConfig, DataConfig, TrainConfig): ...
+
+
+def load_eval_config(path: str) -> EvalConf:
     with Path(path).open() as f:
         data = yaml.safe_load(f)
+    return EvalConf.model_validate(data, strict=False)
 
-    return Config.model_validate(data, strict=True)
+
+def load_config(path: str) -> TrainConf:
+    with Path(path).open() as f:
+        data = yaml.safe_load(f)
+    return TrainConf.model_validate(data, strict=True)

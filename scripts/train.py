@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 import logging
 from argparse import ArgumentParser
 from itertools import cycle, product
