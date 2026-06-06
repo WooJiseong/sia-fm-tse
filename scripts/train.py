@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import logging
 from argparse import ArgumentParser
-from itertools import cycle, product
+from itertools import product
 from pathlib import Path
 
 import torch
@@ -134,10 +134,16 @@ def train(handler: logging.Handler):
     optimizer = torch.optim.AdamW(model.decoder.parameters(), lr=conf.lr)
     total_loss = 0
     loss_tractable = 0
+
+    def fresh_batches(loader):
+        while True:
+            yield from loader
+
     for (epoch, step), (audio, pos, neg) in tqdm(
         zip(
             product(range(conf.epochs), range(conf.steps_per_epoch)),
-            cycle(loader),
+            fresh_batches(loader),
+            strict=False,
         )
     ):
         global_step = conf.steps_per_epoch * epoch + step
@@ -150,7 +156,7 @@ def train(handler: logging.Handler):
         target = audio[:, : conf.active_num[1]].sum(dim=1).squeeze(1)
 
         with torch.no_grad():
-            condition = encoder(pos, neg)      # [B, C, T_enc, F] — passed directly
+            condition = encoder(pos, neg)  # [B, C, T_enc, F] — passed directly
 
             # Resample and convert to mel spectrogram
             mixture = resampler(mixture)
@@ -199,7 +205,8 @@ def train(handler: logging.Handler):
 
     arguments.save_dir.mkdir(parents=True, exist_ok=True)
     save_path = (
-        arguments.save_dir / f"flow_tse_crossattnv2_bs{conf.batch_size}_epoch{conf.epochs}.pt"
+        arguments.save_dir
+        / f"flow_tse_crossattnv2_bs{conf.batch_size}_epoch{conf.epochs}.pt"
     )
 
     torch.save(
