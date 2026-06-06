@@ -122,7 +122,7 @@ def train(handler: logging.Handler):
         dvec_rate=50,
         include_silent=False,
         special_spk=[],
-        reverb="non",
+        reverb="none",
         binaural=False,
         reverb_cond=False,
         zero_in_tgt=False,
