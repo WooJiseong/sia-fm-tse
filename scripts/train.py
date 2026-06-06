@@ -138,7 +138,6 @@ def train(handler: logging.Handler):
         zip(
             product(range(conf.epochs), range(conf.steps_per_epoch)),
             cycle(loader),
-            strict=True,
         )
     ):
         global_step = conf.steps_per_epoch * epoch + step
