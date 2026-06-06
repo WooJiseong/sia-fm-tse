@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import logging
 from argparse import ArgumentParser
+from pathlib import Path
 
 import torch
 
@@ -20,13 +21,13 @@ def main(handler: logging.Handler):
     parser.add_argument(
         "--data_dir",
         help="path to LibriDataset directory",
-        type=str,
+        type=Path,
         required=True,
     )
     parser.add_argument(
         "--noise_dir",
         help="path to Wham-noise Dataset directory",
-        type=str,
+        type=Path,
         required=True,
     )
     arguments = parser.parse_args()
@@ -78,8 +79,8 @@ def main(handler: logging.Handler):
     results = eval(
         model,
         conf,
-        data_dir=arguments.data_dir,
-        noise_dir=arguments.noise_dir,
+        data_dir=str(arguments.data_dir),
+        noise_dir=str(arguments.noise_dir / "tt") + "/",
         handler=handler,
     )
     logger.info(f"results: {results}")

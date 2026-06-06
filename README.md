@@ -46,8 +46,8 @@ checkpoints/
 
 | Purpose | Path | Format |
 |---------|------|--------|
-| Speech mixtures | `data/librispeech/` | LibriSpeech |
-| Noise | `data/wham/` | WHAM! noise dataset |
+| Speech mixtures | `data/LibriSpeech/train-clean-360` | LibriSpeech |
+| Noise | `data/wham_noise/` | WHAM! noise dataset (`tr/`, `cv/`, `tt/` subdirs) |
 
 ---
 
@@ -64,9 +64,9 @@ Model, data, and training settings are managed in `configs/train.yaml`. See [`co
 | Dropout | `dropout` | `0.1` |
 | CFG drop probability | `cond_drop_prob` | `0.1` |
 | Mel channels | `n_mels` | `100` |
-| Speakers in mixture | `mixture_speakers` | `3` |
-| Positive enroll speakers | `positive_enroll_speakers` | `1` |
-| Negative enroll speakers | `negative_enroll_speakers` | `2` |
+| Speakers in mixture | `source_num` | `3` |
+| Min speakers in mixture | `min_source_num` | `3` |
+| Pos/neg enrollment split | `active_num` | `[-1, 1]` |
 | Batch size | `batch_size` | `4` |
 | Epochs | `epochs` | `10` |
 | Steps per epoch | `steps_per_epoch` | `500` |
@@ -80,12 +80,12 @@ Model, data, and training settings are managed in `configs/train.yaml`. See [`co
 ```bash
 uv run python scripts/train.py \
   --config configs/train.yaml \
-  --data_dir data/librispeech \
-  --noise_dir data/wham \
-  --save_dir checkpoints
+  --data_dir data/LibriSpeech/train-clean-360 \
+  --noise_dir data/wham_noise \
+  --save_dir checkpoints/runs
 ```
 
-The checkpoint is saved to `checkpoints/flow_tse_concatenate_bs{batch_size}_epoch{epochs}.pt` when training finishes.
+The checkpoint is saved to `checkpoints/runs/flow_tse_crossattnv2_bs{batch_size}_epoch{epochs}.pt` when training finishes.
 
 ### W&B Logging
 

@@ -31,19 +31,19 @@ def train(handler: logging.Handler):
     parser.add_argument(
         "--data_dir",
         help="path to LibriDataset directory",
-        type=str,
+        type=Path,
         required=True,
     )
     parser.add_argument(
         "--noise_dir",
         help="path to Wham-noise Dataset directory",
-        type=str,
+        type=Path,
         required=True,
     )
     parser.add_argument(
         "--save_dir",
         help="path to save FlowTSE checkpoint",
-        type=str,
+        type=Path,
         required=True,
     )
     arguments = parser.parse_args()
@@ -93,28 +93,17 @@ def train(handler: logging.Handler):
     model.to(device)
 
     # ===== Dataset ===== #
-    enroll_speakers = conf.positive_enroll_speakers + conf.negative_enroll_speakers
     logger.info("loading dataset...")
-    logger.info(
-        f"dataset: {conf.mixture_speakers} speakers would be enrolled as"
-        f"{conf.positive_enroll_speakers} targets, "
-        f"and {conf.negative_enroll_speakers} non-targets"
-    )
     dataset = LibriDataset(
-        arguments.data_dir,
+        str(arguments.data_dir),
         sample_rate=conf.sample_rate,
         wave_length=3 * conf.sample_rate,
         pos_example_length=3 * conf.sample_rate,
         neg_example_length=3 * conf.sample_rate,
         snr_db_range=conf.snr_db_range,
-        min_source_num=conf.mixture_speakers,
-        source_num=conf.mixture_speakers,
-        min_enroll_num=enroll_speakers,
-        enroll_num=enroll_speakers,
-        active_num=[
-            -conf.positive_enroll_speakers,
-            enroll_speakers,
-        ],
+        min_source_num=conf.min_source_num,
+        source_num=conf.source_num,
+        active_num=conf.active_num,
         reproducable=False,
         normalize=False,
         filling_pattern="repeat",
@@ -126,7 +115,7 @@ def train(handler: logging.Handler):
         binaural=False,
         reverb_cond=False,
         zero_in_tgt=False,
-        noise_dir=arguments.noise_dir,
+        noise_dir=str(arguments.noise_dir / "tr") + "/",
         same_disturb=False,
     )
     loader: DataLoader[tuple[torch.Tensor, ...]] = DataLoader(
@@ -159,7 +148,7 @@ def train(handler: logging.Handler):
         neg: torch.Tensor = neg.to(device)
 
         mixture = audio.sum(dim=1).squeeze(1)
-        target = audio[:, :enroll_speakers].sum(dim=1).squeeze(1)
+        target = audio[:, : conf.active_num[1]].sum(dim=1).squeeze(1)
 
         with torch.no_grad():
             condition = encoder(pos, neg)      # [B, C, T_enc, F] — passed directly
@@ -209,10 +198,9 @@ def train(handler: logging.Handler):
         f"non-finite loss ({non_finite_steps / total_steps:.2%})"
     )
 
-    save_dir = Path(arguments.save_dir)
-    save_dir.mkdir(parents=True, exist_ok=True)
+    arguments.save_dir.mkdir(parents=True, exist_ok=True)
     save_path = (
-        save_dir / f"flow_tse_concatenate_bs{conf.batch_size}_epoch{conf.epochs}.pt"
+        arguments.save_dir / f"flow_tse_crossattnv2_bs{conf.batch_size}_epoch{conf.epochs}.pt"
     )
 
     torch.save(

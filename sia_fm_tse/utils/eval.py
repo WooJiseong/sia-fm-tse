@@ -58,7 +58,6 @@ def eval(
     dnsmos = DeepNoiseSuppressionMeanOpinionScore()
 
     # ===== Dataset ===== #
-    enroll_speakers = conf.positive_enroll_speakers + conf.negative_enroll_speakers
     dataset = LibriDataset(
         data_dir,
         sample_rate=conf.sample_rate,
@@ -66,14 +65,9 @@ def eval(
         pos_example_length=3 * conf.sample_rate,
         neg_example_length=3 * conf.sample_rate,
         snr_db_range=conf.snr_db_range,
-        min_source_num=conf.mixture_speakers,
-        source_num=conf.mixture_speakers,
-        min_enroll_num=enroll_speakers,
-        enroll_num=enroll_speakers,
-        active_num=[
-            -conf.positive_enroll_speakers,
-            enroll_speakers,
-        ],
+        min_source_num=conf.min_source_num,
+        source_num=conf.source_num,
+        active_num=conf.active_num,
         reproducable=True,
         normalize=False,
         filling_pattern="repeat",
@@ -81,7 +75,7 @@ def eval(
         dvec_rate=50,
         include_silent=False,
         special_spk=[],
-        reverb="non",
+        reverb="none",
         binaural=False,
         reverb_cond=False,
         zero_in_tgt=False,
@@ -102,7 +96,7 @@ def eval(
         pos: torch.Tensor = pos.to(device)
         neg: torch.Tensor = neg.to(device)
         mixture = audio.sum(dim=1)
-        target = audio[:, :enroll_speakers].sum(dim=1)
+        target = audio[:, : conf.active_num[1]].sum(dim=1)
         pred, _ = model(mixture, pos, neg)
         pesq.update(pred, target)
         snr.update(pred, target)

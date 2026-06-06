@@ -73,17 +73,22 @@ class DataConfig(BaseModel):
         default=(0, 0),
         description="SNR Range for random noise insertion",
     )
-    mixture_speakers: int = Field(
+    source_num: int = Field(
         default=3,
         description="Number of speakers in audio mixture",
     )
-    positive_enroll_speakers: int = Field(
-        default=1,
-        description="Number of speakers in positive audio enrollment",
+    min_source_num: int = Field(
+        default=3,
+        description="Minimum number of speakers in audio mixture",
     )
-    negative_enroll_speakers: int = Field(
-        default=2,
-        description="Number of speakers in negative audio enrollment",
+    active_num: list[int] = Field(
+        default=[-1, 1],
+        description=(
+            "[_, pos_active] — number of positively enrolled speakers (including target). "
+            "Speakers in audio[:, :pos_active] are the extraction target; "
+            "enroll_noise_pids[pos_active-1:] become hard-negative (overlap) enrollees. "
+            "Set to [-1, 1] for single-target extraction."
+        ),
     )
 
 

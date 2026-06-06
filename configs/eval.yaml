@@ -16,9 +16,9 @@ cond_drop_prob: 0.1
 n_mels: 100
 sample_rate: 16000
 snr_db_range: [0, 10]
-mixture_speakers: 3
-positive_enroll_speakers: 1
-negative_enroll_speakers: 2
+source_num: 3
+min_source_num: 3
+active_num: [-1, 1]
 batch_size: 4
 
 # ===== Training =====
