@@ -99,7 +99,7 @@ class CFM(nn.Module):
 
         if vocoder is not None:
             out = rearrange(out, "b n d -> b d n")
-            out: torch.Tensor = vocoder(out)
+            out: torch.Tensor = vocoder.decode(out)
 
         return out, trajectory
 
