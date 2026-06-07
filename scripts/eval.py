@@ -52,6 +52,7 @@ def main(handler: logging.Handler):
     encoder.eval()
     logger.info(f"encoder loaded from {conf.encoder_ckpt_path}")
 
+    spec_dim = 2 * (conf.n_fft // 2 + 1)
     transformer = DiT(
         dim=conf.dim,
         depth=conf.depth,
@@ -59,7 +60,7 @@ def main(handler: logging.Handler):
         dim_head=conf.dim_head,
         dropout=conf.dropout,
         ff_mult=conf.ff_mult,
-        mel_dim=conf.n_mels,
+        mel_dim=spec_dim,
         long_skip_connection=conf.long_skip_connection,
         cond_in_ch=conf.cond_in_ch,
         cond_in_freq=conf.cond_in_freq,
@@ -75,7 +76,13 @@ def main(handler: logging.Handler):
     decoder.eval()
     logger.info(f"decoder loaded from {conf.decoder_ckpt_path}")
 
-    model = FlowTSE(encoder, decoder).to(device)
+    model = FlowTSE(
+        encoder,
+        decoder,
+        n_fft=conf.n_fft,
+        hop_length=conf.hop_length,
+        win_length=conf.win_length,
+    ).to(device)
 
     # ===== Evaluation ===== #
     results = eval(

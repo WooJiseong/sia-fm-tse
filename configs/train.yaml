@@ -14,7 +14,9 @@ cond_in_ch: 64
 cond_in_freq: 65
 
 # ===== Data =====
-n_mels: 100
+n_fft: 512
+hop_length: 128
+win_length: 512
 sample_rate: 16000
 snr_db_range: [0, 10]
 source_num: 3

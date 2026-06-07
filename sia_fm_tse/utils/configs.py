@@ -61,9 +61,17 @@ class ModelConfig(EncoderConfig, DecoderConfig): ...
 
 
 class DataConfig(BaseModel):
-    n_mels: int = Field(
-        default=100,
-        description="Number of mel filterbanks for data",
+    n_fft: int = Field(
+        default=512,
+        description="FFT size for STFT features",
+    )
+    hop_length: int = Field(
+        default=128,
+        description="Hop length for STFT features",
+    )
+    win_length: int = Field(
+        default=512,
+        description="Window length for STFT features",
     )
     sample_rate: Literal[16000] = Field(
         default=16000,

@@ -1,16 +1,22 @@
 import torch
 import torch.nn as nn
-import torchaudio
 from einops import rearrange
-from vocos import Vocos
 
-from ..utils import get_vocos_mel_spectrogram
+from ..utils import istft_torch, stft_torch
 from .decoder import CFM as Decoder
 from .encoder import Encoder
 
 
 class FlowTSE(nn.Module):
-    def __init__(self, encoder: Encoder, decoder: Decoder):
+    def __init__(
+        self,
+        encoder: Encoder,
+        decoder: Decoder,
+        *,
+        n_fft: int = 512,
+        hop_length: int = 128,
+        win_length: int = 512,
+    ):
         """
         Full model for TSE with PN encoder and CFM-based decoder.
         Condition c is injected via cross-attention inside DiT.
@@ -19,19 +25,16 @@ class FlowTSE(nn.Module):
                  │ Encoder │ --> c  (reduce + interpolate to mel T)
          neg --> └─────────┘
 
-         x  --> resample --> mel --> ┌─────────┐
-                                     │ Decoder │ --> waveform (w/ trajectory)
-         c ------------------------> └─────────┘
+         x  --> STFT --> ┌─────────┐
+                         │ Decoder │ --> ISTFT waveform (w/ trajectory)
+         c ------------> └─────────┘
         """
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
-        self.vocoder = Vocos.from_pretrained("charactr/vocos-mel-24khz").to(
-            self.decoder.device
-        )
-        self.resampler = torchaudio.transforms.Resample(
-            orig_freq=16000, new_freq=24000
-        ).to(self.decoder.device)
+        self.n_fft = n_fft
+        self.hop_length = hop_length
+        self.win_length = win_length
 
     def forward(
         self,
@@ -52,21 +55,31 @@ class FlowTSE(nn.Module):
 
         Returns:
             out:        [B, nw] output waveform
-            trajectory: [steps+1, B, T, mel_dim] ODE trajectory
+            trajectory: [steps+1, B, T, stft_dim] ODE trajectory
         """
         c = self.encoder(pos, neg)  # [B, C, T_enc, F] — passed directly
 
-        x = self.resampler(x)
-        m = get_vocos_mel_spectrogram(
-            x, n_mel_channels=self.decoder.transformer.mel_dim
+        original_len = x.shape[-1]
+        m = stft_torch(
+            x,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            win_length=self.win_length,
         )
-        m = rearrange(m, "b d n -> b n d")  # [B, T_mel, mel_dim]
+        m = rearrange(m, "b d n -> b n d")  # [B, T_stft, stft_dim]
 
         out, trajectory = self.decoder(
             m,
             c,
             steps=steps,
             cfg_strength=cfg_strength,
-            vocoder=self.vocoder,
+        )
+        out = rearrange(out, "b n d -> b d n")
+        out = istft_torch(
+            out,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            win_length=self.win_length,
+            length=original_len,
         )
         return out, trajectory

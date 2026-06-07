@@ -5,7 +5,6 @@ from itertools import product
 from pathlib import Path
 
 import torch
-import torchaudio
 from einops import rearrange
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -14,8 +13,8 @@ from sia_fm_tse.model import CFM, DiT, Encoder, FlowTSE
 from sia_fm_tse.utils import (
     LibriDataset,
     WandbHandler,
-    get_vocos_mel_spectrogram,
     load_config,
+    stft_torch,
 )
 
 
@@ -68,10 +67,7 @@ def train(handler: logging.Handler):
     encoder.eval()
     logger.info(f"encoder successfully loaded from {conf.encoder_ckpt_path}")
 
-    resampler = torchaudio.transforms.Resample(
-        orig_freq=16000,
-        new_freq=24000,
-    ).to(device)
+    spec_dim = 2 * (conf.n_fft // 2 + 1)
 
     transformer = DiT(
         dim=conf.dim,
@@ -80,7 +76,7 @@ def train(handler: logging.Handler):
         dim_head=conf.dim_head,
         dropout=conf.dropout,
         ff_mult=conf.ff_mult,
-        mel_dim=conf.n_mels,
+        mel_dim=spec_dim,
         long_skip_connection=conf.long_skip_connection,
         cond_in_ch=conf.cond_in_ch,
         cond_in_freq=conf.cond_in_freq,
@@ -91,7 +87,13 @@ def train(handler: logging.Handler):
         cond_drop_prob=conf.cond_drop_prob,
     )
 
-    model = FlowTSE(encoder, decoder)
+    model = FlowTSE(
+        encoder,
+        decoder,
+        n_fft=conf.n_fft,
+        hop_length=conf.hop_length,
+        win_length=conf.win_length,
+    )
     model.to(device)
 
     # ===== Dataset ===== #
@@ -148,7 +150,7 @@ def train(handler: logging.Handler):
     def save_checkpoint(epoch_num: int, epoch_avg_loss: float) -> None:
         save_path = (
             arguments.save_dir
-            / f"flow_tse_crossattnv2_bs{conf.batch_size}_epoch{epoch_num}.pt"
+            / f"flow_tse_stft_crossattnv2_bs{conf.batch_size}_epoch{epoch_num}.pt"
         )
         torch.save(
             {
@@ -183,11 +185,18 @@ def train(handler: logging.Handler):
         with torch.no_grad():
             condition = encoder(pos, neg)  # [B, C, T_enc, F] — passed directly
 
-            # Resample and convert to mel spectrogram
-            mixture = resampler(mixture)
-            target = resampler(target)
-            noise = get_vocos_mel_spectrogram(mixture, n_mel_channels=conf.n_mels)
-            clean = get_vocos_mel_spectrogram(target, n_mel_channels=conf.n_mels)
+            noise = stft_torch(
+                mixture,
+                n_fft=conf.n_fft,
+                hop_length=conf.hop_length,
+                win_length=conf.win_length,
+            )
+            clean = stft_torch(
+                target,
+                n_fft=conf.n_fft,
+                hop_length=conf.hop_length,
+                win_length=conf.win_length,
+            )
             noise = rearrange(noise, "b d n -> b n d")
             clean = rearrange(clean, "b d n -> b n d")
 

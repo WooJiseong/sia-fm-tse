@@ -103,7 +103,7 @@ dependencies = [
     "torch-einops-utils==0.0.30",
     "torchaudio==2.6.0+cu118",
     "torchdiffeq==0.2.5",
-    "torchmetrics==0.11.4",
+    "torchmetrics[audio]>=1.5.2",
     "tqdm==4.67.1",
     "triton==3.2.0",
     "typeguard==4.5.1",

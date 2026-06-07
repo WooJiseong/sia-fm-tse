@@ -4,7 +4,7 @@ from .configs import EvalConf, TrainConf, load_config, load_eval_config
 from .dataloader import LibriDataset_single_emb as LibriDataset
 from .eval import eval
 from .logger import WandbHandler
-from .spectrogram import get_vocos_mel_spectrogram
+from .spectrogram import get_vocos_mel_spectrogram, istft_torch, stft_torch
 
 __all__ = [
     "WandbHandler",
@@ -14,5 +14,7 @@ __all__ = [
     "load_eval_config",
     "LibriDataset",
     "get_vocos_mel_spectrogram",
+    "stft_torch",
+    "istft_torch",
     "eval",
 ]

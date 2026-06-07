@@ -3,7 +3,6 @@ from typing import Any
 
 import torch
 import torch.nn as nn
-import torchaudio
 from speechmos import dnsmos as _dnsmos
 from torch.utils.data import DataLoader
 from torchmetrics.audio.pesq import PerceptualEvaluationSpeechQuality
@@ -24,10 +23,6 @@ class DeepNoiseSuppressionMeanOpinionScore(Metric):
 
     def update(self, pred: torch.Tensor) -> None:
         audio = pred.squeeze().float().cpu().numpy()
-        # vocos output is mostly within [-1, 1], but ~2.5% of samples briefly
-        # exceed it (measured peak up to 1.28). dnsmos rejects out-of-range
-        # input, so peak-normalize only those outliers; in-range audio is left
-        # untouched to avoid needless gain changes.
         peak = abs(audio).max()
         if peak > 1.0:
             audio = audio / peak
@@ -99,10 +94,6 @@ def eval(
 
     logger.info("Starting evaluation...")
 
-    resampler = torchaudio.transforms.Resample(orig_freq=24000, new_freq=16000).to(
-        device
-    )
-
     for audio, pos, neg in tqdm(dataloader):
         audio: torch.Tensor = audio.to(device)
         pos: torch.Tensor = pos.to(device)
@@ -110,9 +101,6 @@ def eval(
         mixture = audio.sum(dim=1).squeeze(1)
         target = audio[:, : conf.active_num[1]].sum(dim=1).squeeze(1)
         pred, _ = model(mixture, pos, neg)
-        # vocoder outputs at 24kHz; resample to 16kHz to match target and metrics
-        pred = resampler(pred)
-        # 16k -> 24k -> 16k round-trip may differ by a few samples due to rounding
         min_len = min(pred.shape[-1], target.shape[-1])
         pred, target = pred[..., :min_len], target[..., :min_len]
         pesq.update(pred, target)
