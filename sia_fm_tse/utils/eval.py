@@ -3,6 +3,7 @@ from typing import Any
 
 import torch
 import torch.nn as nn
+import torchaudio
 from speechmos import dnsmos as _dnsmos
 from torch.utils.data import DataLoader
 from torchmetrics.audio.pesq import PerceptualEvaluationSpeechQuality
@@ -91,13 +92,16 @@ def eval(
 
     logger.info("Starting evaluation...")
 
+    resampler = torchaudio.transforms.Resample(orig_freq=24000, new_freq=16000).to(device)
+
     for audio, pos, neg in tqdm(dataloader):
         audio: torch.Tensor = audio.to(device)
         pos: torch.Tensor = pos.to(device)
         neg: torch.Tensor = neg.to(device)
-        mixture = audio.sum(dim=1)
-        target = audio[:, : conf.active_num[1]].sum(dim=1)
+        mixture = audio.sum(dim=1).squeeze(1)
+        target = audio[:, : conf.active_num[1]].sum(dim=1).squeeze(1)
         pred, _ = model(mixture, pos, neg)
+        pred = resampler(pred)
         pesq.update(pred, target)
         snr.update(pred, target)
         sisnr.update(pred, target)
