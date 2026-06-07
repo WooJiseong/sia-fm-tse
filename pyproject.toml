@@ -163,5 +163,6 @@ ignore = [
 
 [dependency-groups]
 dev = [
+    "matplotlib>=3.10.9",
     "sia-fm-tse",
 ]
