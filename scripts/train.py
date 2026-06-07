@@ -49,6 +49,8 @@ def train(handler: logging.Handler):
     arguments = parser.parse_args()
 
     # ===== Logging ===== #
+    # root defaults to WARNING, which would drop all logger.info() -> wandb.log()
+    logging.getLogger().setLevel(logging.INFO)
     logger = logging.getLogger(__name__)
     logger.addHandler(handler)
 
@@ -134,10 +136,33 @@ def train(handler: logging.Handler):
     optimizer = torch.optim.AdamW(model.decoder.parameters(), lr=conf.lr)
     total_loss = 0
     loss_tractable = 0
+    epoch_loss = 0.0
+    epoch_steps = 0
+
+    arguments.save_dir.mkdir(parents=True, exist_ok=True)
 
     def fresh_batches(loader):
         while True:
             yield from loader
+
+    def save_checkpoint(epoch_num: int, epoch_avg_loss: float) -> None:
+        save_path = (
+            arguments.save_dir
+            / f"flow_tse_crossattnv2_bs{conf.batch_size}_epoch{epoch_num}.pt"
+        )
+        torch.save(
+            {
+                "epochs": epoch_num,
+                "steps": conf.steps_per_epoch * epoch_num,
+                "steps_per_epoch": conf.steps_per_epoch,
+                "decoder": model.decoder.state_dict(),
+                "final_loss": epoch_avg_loss,
+                "batch_size": conf.batch_size,
+                "lr": conf.lr,
+            },
+            save_path,
+        )
+        logger.info(f"checkpoint saved at: {save_path}")
 
     for (epoch, step), (audio, pos, neg) in tqdm(
         zip(
@@ -178,22 +203,34 @@ def train(handler: logging.Handler):
             loss_tractable += 1
 
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.decoder.parameters(), conf.grad_clip)
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            model.decoder.parameters(), conf.grad_clip
+        )
         optimizer.step()
 
         total_loss += loss.item()
+        epoch_loss += loss.item()
+        epoch_steps += 1
 
         # Record
         if global_step == 0 or global_step % 20 == 0:
-            with torch.no_grad():
-                ...
-
             logger.info({
                 "epoch": epoch + 1,
                 "step": global_step,
                 "loss": loss.item(),
                 "avg_loss": total_loss / (global_step + 1),
+                "grad_norm": grad_norm.item(),
+                "lr": optimizer.param_groups[0]["lr"],
             })
+
+        # End of epoch: log average loss every epoch, save every 5 (and the last)
+        if step == conf.steps_per_epoch - 1:
+            epoch_avg_loss = epoch_loss / max(epoch_steps, 1)
+            logger.info({"epoch": epoch + 1, "epoch_avg_loss": epoch_avg_loss})
+            if (epoch + 1) % 5 == 0 or (epoch + 1) == conf.epochs:
+                save_checkpoint(epoch + 1, epoch_avg_loss)
+            epoch_loss = 0.0
+            epoch_steps = 0
 
     final_loss = total_loss / (global_step + 1)
     logger.info(f"All epoch ended ({conf.epochs}), with final epoch loss {final_loss}")
@@ -204,26 +241,6 @@ def train(handler: logging.Handler):
         f"{non_finite_steps} / {total_steps} steps were terminated because of "
         f"non-finite loss ({non_finite_steps / total_steps:.2%})"
     )
-
-    arguments.save_dir.mkdir(parents=True, exist_ok=True)
-    save_path = (
-        arguments.save_dir
-        / f"flow_tse_crossattnv2_bs{conf.batch_size}_epoch{conf.epochs}.pt"
-    )
-
-    torch.save(
-        {
-            "epochs": conf.epochs,
-            "steps": conf.steps_per_epoch * conf.epochs,
-            "steps_per_epoch": conf.steps_per_epoch,
-            "decoder": model.decoder.state_dict(),
-            "final_loss": final_loss,
-            "batch_size": conf.batch_size,
-            "lr": conf.lr,
-        },
-        save_path,
-    )
-    logger.info(f"experiment saved at: {save_path}")
     logger.info("FlowTSE training has done")
 
 

@@ -23,7 +23,7 @@ active_num: [-1, 1]
 batch_size: 4
 
 # ===== Training =====
-epochs: 10
+epochs: 30
 steps_per_epoch: 500
 grad_clip: 1.0
 lr: 1.0e-4
