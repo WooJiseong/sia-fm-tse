@@ -39,3 +39,6 @@ credentials.yaml
 
 # ===== Slurm =====
 *.sbatch
+
+# ===== Scratch / one-off probes =====
+tmp/

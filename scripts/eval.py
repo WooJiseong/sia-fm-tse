@@ -33,6 +33,8 @@ def main(handler: logging.Handler):
     arguments = parser.parse_args()
 
     # ===== Logging ===== #
+    # root defaults to WARNING, which would drop all logger.info() -> wandb.log()
+    logging.getLogger().setLevel(logging.INFO)
     logger = logging.getLogger(__name__)
     logger.addHandler(handler)
 
