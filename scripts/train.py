@@ -188,10 +188,12 @@ def train(handler: logging.Handler):
             with torch.no_grad():
                 ...
 
-            logger.info(
-                f"epoch {epoch + 1:03d} | step {global_step:06d} | "
-                f"loss {loss.item():.6f} | avg_loss {total_loss / (global_step + 1)}"
-            )
+            logger.info({
+                "epoch": epoch + 1,
+                "step": global_step,
+                "loss": loss.item(),
+                "avg_loss": total_loss / (global_step + 1),
+            })
 
     final_loss = total_loss / (global_step + 1)
     logger.info(f"All epoch ended ({conf.epochs}), with final epoch loss {final_loss}")

@@ -2,7 +2,7 @@
 encoder_ckpt_path: checkpoints/encoder.pt
 
 # ===== Decoder (DiT) =====
-decoder_ckpt_path:
+decoder_ckpt_path: checkpoints/runs/flow_tse_crossattnv2_bs4_epoch10.pt
 dim: 256
 depth: 8
 n_head: 8
