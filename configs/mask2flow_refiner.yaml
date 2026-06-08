@@ -1,0 +1,27 @@
+paths:
+  cache_dir: outputs/mask2flow_cache/mixture
+  save_dir: outputs/mask2flow_refiner/mixture
+
+model:
+  n_fft: 512
+  dim: 256
+  depth: 8
+  n_head: 8
+  dim_head: 64
+  ff_mult: 4
+  dropout: 0.1
+  long_skip_connection: true
+  cond_drop_prob: 0.1
+  cond_in_ch: 64
+  cond_in_freq: 65
+
+train:
+  batch_size: 2
+  epochs: 30
+  lr: 1.0e-4
+  weight_decay: 0.0
+  grad_clip: 1.0
+  endpoint_l1_weight: 0.1
+  num_workers: 0
+  log_interval: 20
+  save_every_epoch: 1

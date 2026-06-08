@@ -305,15 +305,23 @@ class LibriDataset_single_emb(Dataset):
                 summary = open(
                     f"{root_dir}/{pid}/{chapter_id}/{pid}-{chapter_id}.trans.txt"
                 )
-                files.extend(
-                    [
+                for line in summary:
+                    utt_id = line.split(" ")[0]
+                    rel_path = f"{chapter_id}/{utt_id}.flac"
+                    abs_path = f"{root_dir}/{pid}/{rel_path}"
+
+                    # Some LibriSpeech folders may contain transcript entries
+                    # whose corresponding .flac files are missing.
+                    # Skip missing files to avoid FileNotFoundError during loading.
+                    if not os.path.exists(abs_path):
+                        continue
+
+                    files.append(
                         (
-                            f"{chapter_id}/{line.split(' ')[0]}.flac",
+                            rel_path,
                             " ".join(line.split(" ")[1:]),
                         )
-                        for line in summary
-                    ]
-                )
+                    )
             files.sort()
             self.person_sound_map[pid] = files
 

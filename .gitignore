@@ -42,3 +42,17 @@ credentials.yaml
 
 # ===== Scratch / one-off probes =====
 tmp/
+
+# experiment outputs
+outputs/
+logs/
+*.pt
+*.pth
+*.ckpt
+*.wav
+*.flac
+*.log
+*.tsv
+
+# local checkpoints/symlinks
+checkpoints/
