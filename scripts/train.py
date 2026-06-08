@@ -150,7 +150,7 @@ def train(handler: logging.Handler):
     def save_checkpoint(epoch_num: int, epoch_avg_loss: float) -> None:
         save_path = (
             arguments.save_dir
-            / f"flow_tse_stft_crossattnv2_bs{conf.batch_size}_epoch{epoch_num}.pt"
+            / f"flow_tse_stft_m2s_crossattnv2_bs{conf.batch_size}_epoch{epoch_num}.pt"
         )
         torch.save(
             {

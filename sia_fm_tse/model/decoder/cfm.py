@@ -50,21 +50,19 @@ class CFM(nn.Module):
         *,
         steps=32,
         cfg_strength=1.0,
-        vocoder: nn.Module | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Sample clean audio via ODE integration.
+        Sample the source STFT via ODE integration.
 
         Args:
-            m: [B, T, mel_dim] audio mixture
+            m: [B, T, stft_dim] mixture STFT (flow start point at t=0)
             c: [B, T, D] encoder condition
             steps: number of ODE steps (=NFE)
             cfg_strength: CFG guidance strength
-            vocoder: optional vocoder to convert mel to waveform
 
         Returns:
-            out: [B, T, mel_dim] or [B, nw] if vocoder is provided
-            trajectory: [steps+1, B, T, mel_dim] ODE trajectory
+            out: [B, T, stft_dim] sampled source STFT (ISTFT is applied by the caller)
+            trajectory: [steps+1, B, T, stft_dim] ODE trajectory
         """
 
         def fn(t: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
@@ -72,7 +70,6 @@ class CFM(nn.Module):
 
             pred = self.transformer(
                 x=x,
-                m=m,
                 c=c,
                 t=t,
                 mask=None,
@@ -83,7 +80,6 @@ class CFM(nn.Module):
 
             null_pred = self.transformer(
                 x=x,
-                m=m,
                 c=torch.zeros_like(c),
                 t=t,
                 mask=None,
@@ -91,15 +87,12 @@ class CFM(nn.Module):
 
             return pred + (pred - null_pred) * cfg_strength
 
-        x0 = torch.randn_like(m)
+        # mixture -> source flow: start ODE at the mixture (t=0), integrate to source (t=1)
+        x0 = m
 
         t = torch.linspace(0, 1, steps + 1, device=self.device, dtype=c.dtype)
         trajectory: torch.Tensor = odeint(fn, x0, t, method=self.odeint_method)  # type: ignore
         out = trajectory[-1]
-
-        if vocoder is not None:
-            out = rearrange(out, "b n d -> b d n")
-            out: torch.Tensor = vocoder.decode(out)
 
         return out, trajectory
 
@@ -120,7 +113,8 @@ class CFM(nn.Module):
         Returns:
             loss: scalar MSE loss between predicted and target flow
         """
-        x0 = torch.randn_like(x1)
+        # mixture -> source flow: x0 is the mixture (t=0), x1 the clean source (t=1)
+        x0 = m
         t = torch.rand(x0.shape[0], dtype=x0.dtype, device=self.device)
         t_expand = rearrange(t, "b -> b 1 1")
 
@@ -138,7 +132,7 @@ class CFM(nn.Module):
         drop_cond_mask = rearrange(drop_cond_mask, "b -> b 1 1 1")
         c = torch.where(drop_cond_mask, torch.zeros_like(c), c)
 
-        pred = self.transformer(x=φ, m=m, c=c, t=t)
+        pred = self.transformer(x=φ, c=c, t=t)
 
         loss = F.mse_loss(pred, flow, reduction="none")
 

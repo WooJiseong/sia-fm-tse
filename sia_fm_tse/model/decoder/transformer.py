@@ -234,19 +234,20 @@ class DiT(nn.Module):
         """
         Diffusion Transformer (DiT) — https://arxiv.org/pdf/2212.09748
 
-        x and m are jointly embedded via InputEmbedding (mel_dim*2 -> dim).
-        c (raw encoder output) is independently embedded via ConditionEmbedding
-        (cond_in_ch * cond_in_freq -> dim), which handles channel/freq flattening.
-        c may have a different sequence length T_c; cross-attention handles this naturally.
+        x is embedded via InputEmbedding (mel_dim -> dim). The mixture enters as
+        the flow start point x0 (mixture at t=0 -> source at t=1), not as a separate
+        input channel. c (raw encoder output) is independently embedded via
+        ConditionEmbedding (cond_in_ch * cond_in_freq -> dim), which handles
+        channel/freq flattening. c may have a different sequence length T_c;
+        cross-attention handles this naturally.
 
         c: [B, C, T_c, F]  <- raw encoder output (T_c may differ from T)
-        m: [B, T, mel_dim] <- mixture mel-spectrogram
-        x: [B, T, mel_dim] <- noisy mel-spectrogram
+        x: [B, T, mel_dim] <- flow state (mixture at t=0 -> source at t=1)
         t: [B]
 
                    ╭──────────────────────────╮
-         x, m -->  │ InputEmbedding           │ --> x_emb [B, T, D]
-                   │ (mel_dim*2 -> dim)       │
+         x  -->    │ InputEmbedding           │ --> x_emb [B, T, D]
+                   │ (mel_dim -> dim)         │
                    ╰──────────────────────────╯
 
                  ╭──────────────────────────╮
@@ -266,7 +267,7 @@ class DiT(nn.Module):
         """
         super().__init__()
         self.time_emb = TimestepEmbedding(dim)
-        self.input_emb = InputEmbedding(mel_dim * 2, out_dim=dim)
+        self.input_emb = InputEmbedding(mel_dim, out_dim=dim)
         self.cond_emb = ConditionEmbedding(
             in_ch=cond_in_ch, in_freq=cond_in_freq, out_dim=dim
         )
@@ -293,15 +294,13 @@ class DiT(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        m: torch.Tensor,
         c: torch.Tensor,
         t: torch.Tensor,
         mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Args:
-            x: [B, T, mel_dim] noisy mel-spectrogram
-            m: [B, T, mel_dim] mixture mel-spectrogram
+            x: [B, T, mel_dim] flow state (mixture at t=0 -> source at t=1)
             c: [B, C, T_c, F] raw encoder output (T_c may differ from T)
             t: [B] diffusion timestep
             mask: Optional [B, T] boolean Tensor for self-attention (True = valid)
@@ -311,7 +310,7 @@ class DiT(nn.Module):
         """
         seq_len = x.shape[1]
         t = self.time_emb(t)
-        x = self.input_emb(x, m)
+        x = self.input_emb(x)
         c = self.cond_emb(c)
         rope = self.rotary_emb.forward_from_seq_len(seq_len)
 
