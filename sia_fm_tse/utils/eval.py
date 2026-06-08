@@ -1,37 +1,16 @@
 import logging
-from typing import Any
 
 import torch
 import torch.nn as nn
-from speechmos import dnsmos as _dnsmos
 from torch.utils.data import DataLoader
+from torchmetrics.audio.dnsmos import DeepNoiseSuppressionMeanOpinionScore
 from torchmetrics.audio.pesq import PerceptualEvaluationSpeechQuality
 from torchmetrics.audio.snr import ScaleInvariantSignalNoiseRatio, SignalNoiseRatio
 from torchmetrics.audio.stoi import ShortTimeObjectiveIntelligibility
-from torchmetrics.metric import Metric
 from tqdm import tqdm
 
 from . import LibriDataset
 from .configs import EvalConf
-
-
-class DeepNoiseSuppressionMeanOpinionScore(Metric):
-    def __init__(self, **kwargs: Any):
-        super().__init__(**kwargs)
-        self.add_state("ovrl_sum", default=torch.tensor(0.0), dist_reduce_fx="sum")
-        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
-
-    def update(self, pred: torch.Tensor) -> None:
-        audio = pred.squeeze().float().cpu().numpy()
-        peak = abs(audio).max()
-        if peak > 1.0:
-            audio = audio / peak
-        result = _dnsmos.run(audio, sr=16000)
-        self.ovrl_sum += result["ovrl_mos"]  # type: ignore
-        self.total += 1
-
-    def compute(self) -> torch.Tensor:
-        return self.ovrl_sum / self.total  # type: ignore
 
 
 @torch.no_grad()
@@ -58,7 +37,9 @@ def eval(
     sisnr = ScaleInvariantSignalNoiseRatio().to(device)
     snr = SignalNoiseRatio().to(device)
     stoi = ShortTimeObjectiveIntelligibility(fs=16000).to(device)
-    dnsmos = DeepNoiseSuppressionMeanOpinionScore().to(device)
+    dnsmos = DeepNoiseSuppressionMeanOpinionScore(
+        fs=16000, personalized=False, device="cpu"
+    )
 
     # ===== Dataset ===== #
     dataset = LibriDataset(
@@ -114,7 +95,7 @@ def eval(
         "snr": snr.compute().item(),
         "si_snr": sisnr.compute().item(),
         "stoi": stoi.compute().item(),
-        "dnsmos": dnsmos.compute().item(),
+        "dnsmos": dnsmos.compute()[3].item(),  # => overall dnsmos
     }
 
     logger.info(results)
